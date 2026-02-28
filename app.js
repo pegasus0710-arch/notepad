@@ -17,7 +17,7 @@ import {
 // Firebase 설정 (본인 프로젝트 값)
 // ══════════════════════════════════════════════════════
 const firebaseConfig = {
-  apiKey:            "AIzaSyComDAR1eCbTfzB9LTdS211DSSHp1PXIPk",
+  apiKey:            "AIzaSyComDARleCbTfzB9LTdS211DSSHp1PXIPk",
   authDomain:        "notepad-e6a66.firebaseapp.com",
   projectId:         "notepad-e6a66",
   storageBucket:     "notepad-e6a66.firebasestorage.app",
