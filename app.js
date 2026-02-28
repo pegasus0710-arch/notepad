@@ -17,13 +17,13 @@ import {
 // Firebase 설정 (본인 프로젝트 값)
 // ══════════════════════════════════════════════════════
 const firebaseConfig = {
-  apiKey:            "AIzaSyComDARleCbTfzB9LTdS211DSSHp1PXIPk",
-  authDomain:        "notepad-e6a66.firebaseapp.com",
-  projectId:         "notepad-e6a66",
-  storageBucket:     "notepad-e6a66.firebasestorage.app",
+  apiKey: "AIzaSyComDARleCbTfzB9LTdS211DSSHp1PXIPk",
+  authDomain: "notepad-e6a66.firebaseapp.com",
+  projectId: "notepad-e6a66",
+  storageBucket: "notepad-e6a66.firebasestorage.app",
   messagingSenderId: "739275664534",
-  appId:             "1:739275664534:web:8368fdffb5d8f3d67da6b7",
-  measurementId:     "G-GN1FNHRGBE"
+  appId: "1:739275664534:web:8368fdffb5d8f3d67da6b7",
+  measurementId: "G-GN1FNHRGBE"
 };
 
 const app      = initializeApp(firebaseConfig);
