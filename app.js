@@ -5,827 +5,742 @@ import { getFirestore, collection, doc, getDocs, addDoc, deleteDoc, setDoc, serv
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
-// ══════════════════════════════════════════════
-// Firebase 설정 (본인 설정으로 교체)
-// ══════════════════════════════════════════════
+// ═══════════════════════════════════════
+// Firebase 설정
+// ═══════════════════════════════════════
 const firebaseConfig = {
-  apiKey: "AIzaSyComDAR1eCbTfzB9LTdS211DSSHp1PXIPk",
-  authDomain: "notepad-e6a66.firebaseapp.com",
-  projectId: "notepad-e6a66",
-  storageBucket: "notepad-e6a66.firebasestorage.app",
+  apiKey:            "AIzaSyComDAR1eCbTfzB9LTdS211DSSHp1PXIPk",
+  authDomain:        "notepad-e6a66.firebaseapp.com",
+  projectId:         "notepad-e6a66",
+  storageBucket:     "notepad-e6a66.firebasestorage.app",
   messagingSenderId: "739275664534",
-  appId: "1:739275664534:web:8368fdffb5d8f3d67da6b7",
-  measurementId: "G-GN1FNHRGBE"
+  appId:             "1:739275664534:web:8368fdffb5d8f3d67da6b7",
+  measurementId:     "G-GN1FNHRGBE"
 };
-const fbApp = initializeApp(firebaseConfig);
-const db    = getFirestore(fbApp);
-const auth  = getAuth(fbApp);
-const provider = new GoogleAuthProvider();
+const fbApp    = initializeApp(firebaseConfig);
+const db       = getFirestore(fbApp);
+const auth     = getAuth(fbApp);
+const gProvider = new GoogleAuthProvider();
 
-// ══════════════════════════════════════════════
-// 상태
-// ══════════════════════════════════════════════
-let currentUser = null;
-let notes = [];        // active notes
-let trashedNotes = []; // deleted notes
-let categories = [];   // [{id, name, colorIdx}]
-let settings = { trashPeriod: 30 };
+// ═══════════════════════════════════════
+// App State
+// ═══════════════════════════════════════
+let me = null;          // current user
+let notes     = [];     // active notes
+let trashed   = [];     // deleted notes
+let cats      = [];     // categories [{_id, name}]
+let trashDays = 30;     // auto-delete period
 
-let currentNav = 'all';      // 'all' | 'trash' | 'cat:{id}'
-let currentView = 'grid';    // 'grid' | 'list' | 'magazine'
-let editingDocId = null;
-let editTags = [];
-let editLinks = []; // [{label, url}]
+let nav  = 'all';       // 'all' | 'trash' | 'cat:{id}'
+let view = 'grid';      // 'grid' | 'list' | 'magazine'
 
-// ══════════════════════════════════════════════
-// Firestore 경로
-// ══════════════════════════════════════════════
-const notesCol  = () => collection(db, 'users', currentUser.uid, 'notes');
-const catsCol   = () => collection(db, 'users', currentUser.uid, 'categories');
-const settDoc   = () => doc(db, 'users', currentUser.uid, 'settings', 'main');
+// Edit modal state
+let editId   = null;    // docId being edited (null = new)
+let eTags    = [];      // current tag list
+let eLinks   = [];      // current link list [{label, url}]
 
-// ══════════════════════════════════════════════
-// 로드
-// ══════════════════════════════════════════════
+// ═══════════════════════════════════════
+// Firestore helpers
+// ═══════════════════════════════════════
+const notesRef  = () => collection(db, 'users', me.uid, 'notes');
+const catsRef   = () => collection(db, 'users', me.uid, 'categories');
+const settRef   = () => doc(db, 'users', me.uid, 'settings', 'main');
+
+// ═══════════════════════════════════════
+// Load all data
+// ═══════════════════════════════════════
 async function loadAll() {
-  setSyncStatus('loading');
+  setSyncStatus('ing');
   try {
     // Notes
-    const nSnap = await getDocs(notesCol());
-    const allNotes = nSnap.docs.map(d => ({
-      ...d.data(), _docId: d.id,
-      createdAt: d.data().createdAt?.toDate?.() || new Date(d.data().createdAt || Date.now()),
-      updatedAt: d.data().updatedAt?.toDate?.() || new Date(d.data().updatedAt || Date.now()),
-      deletedAt: d.data().deletedAt?.toDate?.() || (d.data().deletedAt ? new Date(d.data().deletedAt) : null),
+    const ns = await getDocs(notesRef());
+    const all = ns.docs.map(d => ({
+      ...d.data(),
+      _id: d.id,
+      createdAt: toDate(d.data().createdAt),
+      updatedAt: toDate(d.data().updatedAt),
+      deletedAt: toDate(d.data().deletedAt),
     }));
-    notes = allNotes.filter(n => !n.deleted);
-    trashedNotes = allNotes.filter(n => n.deleted);
+    notes   = all.filter(n => !n.deleted);
+    trashed = all.filter(n =>  n.deleted);
 
     // Categories
-    const cSnap = await getDocs(catsCol());
-    categories = cSnap.docs.map(d => ({ ...d.data(), _docId: d.id }));
+    const cs = await getDocs(catsRef());
+    cats = cs.docs.map(d => ({ ...d.data(), _id: d.id }));
 
     // Settings
     try {
-      const sSnap = await getDocs(collection(db, 'users', currentUser.uid, 'settings'));
-      sSnap.docs.forEach(d => { if (d.id === 'main') settings = { ...settings, ...d.data() }; });
-      document.getElementById('trash-period-select').value = String(settings.trashPeriod ?? 30);
+      const ss = await getDocs(collection(db, 'users', me.uid, 'settings'));
+      ss.forEach(d => { if (d.id === 'main' && d.data().trashDays != null) trashDays = d.data().trashDays; });
+      document.getElementById('trash-period').value = String(trashDays);
     } catch {}
 
-    // Auto-delete expired trash
-    await autoDeleteExpiredTrash();
-
+    await pruneTrash();
     setSyncStatus('ok');
   } catch(e) {
     console.error(e);
-    setSyncStatus('error');
+    setSyncStatus('err');
   }
 }
 
-// ══════════════════════════════════════════════
-// 카테고리 CRUD
-// ══════════════════════════════════════════════
-const CAT_COLORS = 8; // 0~7
-
-function getCatById(id) {
-  return categories.find(c => c._docId === id);
-}
-function getCatColorIdx(catId) {
-  const idx = categories.findIndex(c => c._docId === catId);
-  return idx >= 0 ? idx % CAT_COLORS : -1;
+function toDate(v) {
+  if (!v) return null;
+  if (v?.toDate) return v.toDate();
+  return new Date(v);
 }
 
-window.addCategory = async function() {
-  const input = document.getElementById('new-cat-input');
-  const name = input.value.trim();
-  if (!name) return;
-  if (categories.find(c => c.name === name)) { showToast('이미 있는 카테고리입니다.', 'error'); return; }
+// ═══════════════════════════════════════
+// Auto-prune expired trash
+// ═══════════════════════════════════════
+async function pruneTrash() {
+  if (!trashDays) return;
+  const cutoff = Date.now() - trashDays * 864e5;
+  const expired = trashed.filter(n => n.deletedAt && new Date(n.deletedAt) < cutoff);
+  if (!expired.length) return;
+  const b = writeBatch(db);
+  expired.forEach(n => b.delete(doc(notesRef(), n._id)));
+  await b.commit();
+  trashed = trashed.filter(n => !expired.find(e => e._id === n._id));
+}
+
+// ═══════════════════════════════════════
+// Category helpers
+// ═══════════════════════════════════════
+function catById(id) { return cats.find(c => c._id === id) || null; }
+function catIdx(id)  { const i = cats.findIndex(c => c._id === id); return i >= 0 ? i % 8 : -1; }
+function catColor(id){ const i = catIdx(id); return i >= 0 ? i : null; }
+const MAG_EMOJIS = ['💼','🌿','💡','🔮','🌊','🌸','🍀','⭐'];
+
+// ═══════════════════════════════════════
+// CATEGORY CRUD
+// ═══════════════════════════════════════
+window.addCat = async function() {
+  const inp = document.getElementById('new-cat-inp');
+  const name = inp.value.trim();
+  if (!name) { inp.focus(); return; }
+  if (cats.find(c => c.name === name)) { showToast(`'${name}' 이미 존재합니다.`, 'wrn'); return; }
   try {
-    const ref = await addDoc(catsCol(), { name });
-    categories.push({ name, _docId: ref.id });
-    input.value = '';
-    renderSidebar();
-    renderCatSelect();
-    showToast(`'${name}' 카테고리 추가됨`, 'success');
-  } catch(e) { showToast('추가 실패: ' + e.message, 'error'); }
+    const ref = await addDoc(catsRef(), { name });
+    cats.push({ _id: ref.id, name });
+    inp.value = '';
+    renderAll();
+    showToast(`'${name}' 카테고리 추가됨 ✅`);
+  } catch(e) { showToast('추가 실패: ' + e.message, 'err'); }
 };
 
-window.deleteCategory = async function(catId) {
-  const cat = getCatById(catId);
+window.delCat = async function(id) {
+  const cat = catById(id);
   if (!cat) return;
-  if (!confirm(`'${cat.name}' 카테고리를 삭제하시겠습니까?\n해당 카테고리의 메모는 '카테고리없음'으로 변경됩니다.`)) return;
+  if (!confirm(`'${cat.name}' 카테고리를 삭제하시겠습니까?\n해당 카테고리 메모는 '카테고리없음'으로 변경됩니다.`)) return;
   try {
-    // Batch: delete cat + update notes
     const batch = writeBatch(db);
-    batch.delete(doc(catsCol(), catId));
-    const affected = notes.filter(n => n.category === catId);
-    affected.forEach(n => {
-      batch.set(doc(notesCol(), n._docId), { category: '', updatedAt: serverTimestamp() }, { merge: true });
+    batch.delete(doc(catsRef(), id));
+    notes.filter(n => n.category === id).forEach(n => {
+      batch.set(doc(notesRef(), n._id), { category: '', updatedAt: serverTimestamp() }, { merge: true });
       n.category = '';
     });
     await batch.commit();
-    categories = categories.filter(c => c._docId !== catId);
-    if (currentNav === `cat:${catId}`) selectNav('all');
+    cats = cats.filter(c => c._id !== id);
+    if (nav === `cat:${id}`) nav = 'all';
     renderAll();
-    showToast(`'${cat.name}' 카테고리 삭제됨`, 'success');
-  } catch(e) { showToast('삭제 실패: ' + e.message, 'error'); }
+    showToast(`'${cat.name}' 삭제됨`);
+  } catch(e) { showToast('삭제 실패: ' + e.message, 'err'); }
 };
 
-// ══════════════════════════════════════════════
-// 노트 CRUD
-// ══════════════════════════════════════════════
-async function addNote(data) {
+// ═══════════════════════════════════════
+// NOTE CRUD
+// ═══════════════════════════════════════
+async function createNote(data) {
   const payload = { ...data, deleted: false, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
-  const ref = await addDoc(notesCol(), payload);
+  const ref = await addDoc(notesRef(), payload);
   const now = new Date();
-  const note = { ...data, deleted: false, _docId: ref.id, createdAt: now, updatedAt: now, deletedAt: null };
-  notes.push(note);
-  return note;
+  notes.push({ ...data, deleted: false, _id: ref.id, createdAt: now, updatedAt: now });
 }
 
-async function updateNote(docId, data) {
-  await setDoc(doc(notesCol(), docId), { ...data, updatedAt: serverTimestamp() }, { merge: true });
-  const idx = notes.findIndex(n => n._docId === docId);
-  if (idx !== -1) notes[idx] = { ...notes[idx], ...data, updatedAt: new Date() };
+async function updateNoteDoc(id, data) {
+  await setDoc(doc(notesRef(), id), { ...data, updatedAt: serverTimestamp() }, { merge: true });
+  const i = notes.findIndex(n => n._id === id);
+  if (i >= 0) notes[i] = { ...notes[i], ...data, updatedAt: new Date() };
 }
 
-// 휴지통으로 이동 (soft delete)
-async function moveToTrash(docId) {
-  const now = new Date();
-  await setDoc(doc(notesCol(), docId), { deleted: true, deletedAt: serverTimestamp() }, { merge: true });
-  const note = notes.find(n => n._docId === docId);
-  if (note) {
-    note.deleted = true; note.deletedAt = now;
-    notes = notes.filter(n => n._docId !== docId);
-    trashedNotes.push(note);
-  }
+async function softDelete(id) {
+  const now = serverTimestamp();
+  await setDoc(doc(notesRef(), id), { deleted: true, deletedAt: now }, { merge: true });
+  const n = notes.find(x => x._id === id);
+  if (n) { n.deleted = true; n.deletedAt = new Date(); notes = notes.filter(x => x._id !== id); trashed.push(n); }
 }
 
-// 복원
-async function restoreNote(docId) {
-  await setDoc(doc(notesCol(), docId), { deleted: false, deletedAt: null }, { merge: true });
-  const note = trashedNotes.find(n => n._docId === docId);
-  if (note) {
-    note.deleted = false; note.deletedAt = null;
-    trashedNotes = trashedNotes.filter(n => n._docId !== docId);
-    notes.push(note);
-  }
+async function restoreNote(id) {
+  await setDoc(doc(notesRef(), id), { deleted: false, deletedAt: null }, { merge: true });
+  const n = trashed.find(x => x._id === id);
+  if (n) { n.deleted = false; n.deletedAt = null; trashed = trashed.filter(x => x._id !== id); notes.push(n); }
 }
 
-// 완전 삭제
-async function permanentDelete(docId) {
-  await deleteDoc(doc(notesCol(), docId));
-  trashedNotes = trashedNotes.filter(n => n._docId !== docId);
+async function hardDelete(id) {
+  await deleteDoc(doc(notesRef(), id));
+  trashed = trashed.filter(x => x._id !== id);
 }
 
-// 자동 삭제 (기간 초과)
-async function autoDeleteExpiredTrash() {
-  const period = settings.trashPeriod ?? 30;
-  if (period === 0) return;
-  const now = Date.now();
-  const expired = trashedNotes.filter(n => {
-    if (!n.deletedAt) return false;
-    const ms = period * 24 * 60 * 60 * 1000;
-    return (now - new Date(n.deletedAt).getTime()) > ms;
-  });
-  if (!expired.length) return;
-  const batch = writeBatch(db);
-  expired.forEach(n => batch.delete(doc(notesCol(), n._docId)));
-  await batch.commit();
-  trashedNotes = trashedNotes.filter(n => !expired.includes(n));
-}
-
-// 휴지통 비우기
+window.doTrash   = async function(id) {
+  const n = notes.find(x => x._id === id);
+  if (!confirm(`"${n?.title||'이 메모'}"를 휴지통으로 이동할까요?`)) return;
+  try { await softDelete(id); closeDet(); renderAll(); showToast('휴지통으로 이동했습니다.'); }
+  catch(e) { showToast('오류: ' + e.message, 'err'); }
+};
+window.doRestore = async function(id) {
+  try { await restoreNote(id); closeDet(); renderAll(); showToast('복원되었습니다. ✅'); }
+  catch(e) { showToast('오류: ' + e.message, 'err'); }
+};
+window.doHardDel = async function(id) {
+  if (!confirm('완전히 삭제합니다. 복구할 수 없습니다.')) return;
+  try { await hardDelete(id); closeDet(); renderAll(); showToast('영구 삭제됨'); }
+  catch(e) { showToast('오류: ' + e.message, 'err'); }
+};
 window.emptyTrash = async function() {
-  if (!trashedNotes.length) { showToast('휴지통이 비어있습니다.', 'warning'); return; }
-  if (!confirm(`휴지통의 메모 ${trashedNotes.length}개를 영구 삭제하시겠습니까?`)) return;
+  if (!trashed.length) { showToast('휴지통이 비어있습니다.', 'wrn'); return; }
+  if (!confirm(`휴지통의 메모 ${trashed.length}개를 모두 영구 삭제할까요?`)) return;
   try {
-    const batch = writeBatch(db);
-    trashedNotes.forEach(n => batch.delete(doc(notesCol(), n._docId)));
-    await batch.commit();
-    trashedNotes = [];
+    const b = writeBatch(db);
+    trashed.forEach(n => b.delete(doc(notesRef(), n._id)));
+    await b.commit();
+    trashed = [];
     renderAll();
-    showToast('휴지통을 비웠습니다.', 'success');
-  } catch(e) { showToast('실패: ' + e.message, 'error'); }
+    showToast('휴지통을 비웠습니다.');
+  } catch(e) { showToast('오류: ' + e.message, 'err'); }
 };
-
-// 휴지통 기간 저장
 window.saveTrashPeriod = async function() {
-  const period = parseInt(document.getElementById('trash-period-select').value);
-  settings.trashPeriod = period;
-  await setDoc(settDoc(), { trashPeriod: period }, { merge: true });
-  showToast('설정이 저장되었습니다.', 'success');
+  trashDays = parseInt(document.getElementById('trash-period').value);
+  await setDoc(settRef(), { trashDays }, { merge: true });
+  showToast('설정 저장됨 ✅');
 };
 
-// ══════════════════════════════════════════════
-// 링크 - 파비콘 URL
-// ══════════════════════════════════════════════
-function getFaviconUrl(url) {
-  try {
-    const domain = new URL(url).hostname;
-    return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-  } catch { return ''; }
+// ═══════════════════════════════════════
+// Favicon / URL helpers
+// ═══════════════════════════════════════
+function favicon(url) {
+  try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=32`; }
+  catch { return ''; }
 }
-function getDomain(url) {
+function domain(url) {
   try { return new URL(url).hostname.replace('www.', ''); }
   catch { return url.slice(0, 30); }
 }
 
-// ══════════════════════════════════════════════
-// 태그 자동 추출
-// ══════════════════════════════════════════════
+// ═══════════════════════════════════════
+// Tag helpers
+// ═══════════════════════════════════════
 function extractTags(text) {
-  const tags = (text.match(/#[\w가-힣]+/g) || []).map(t => t.slice(1));
-  return [...new Set(tags)];
+  return [...new Set((text.match(/#[\w가-힣]+/g) || []).map(t => t.slice(1)))];
 }
 
-// ══════════════════════════════════════════════
-// 필터 & 정렬
-// ══════════════════════════════════════════════
-function getFilteredSorted() {
-  const q = (document.getElementById('search-input')?.value || '').trim().toLowerCase();
-  const sort = document.getElementById('sort-select')?.value || 'created_desc';
-  const isTrash = currentNav === 'trash';
-  let list = isTrash ? [...trashedNotes] : [...notes];
+// ═══════════════════════════════════════
+// Filter + Sort
+// ═══════════════════════════════════════
+function filtered() {
+  const q    = (document.getElementById('search-inp')?.value || '').trim().toLowerCase();
+  const sort = document.getElementById('sort-sel')?.value || 'cd';
+  const isT  = nav === 'trash';
+  let list   = isT ? [...trashed] : [...notes];
 
-  // 카테고리 필터
-  if (!isTrash && currentNav.startsWith('cat:')) {
-    const catId = currentNav.slice(4);
-    list = list.filter(n => n.category === catId);
+  if (!isT && nav.startsWith('cat:')) {
+    const cid = nav.slice(4);
+    list = list.filter(n => n.category === cid);
   }
-
-  // 검색
   if (q) {
     list = list.filter(n =>
       (n.title||'').toLowerCase().includes(q) ||
       (n.content||'').toLowerCase().includes(q) ||
       (n.tags||[]).some(t => t.toLowerCase().includes(q)) ||
-      (getCatById(n.category)?.name||'').toLowerCase().includes(q)
+      (catById(n.category)?.name||'').toLowerCase().includes(q)
     );
   }
-
-  // 정렬
-  const key = sort.startsWith('created') ? 'createdAt' : 'updatedAt';
-  const asc = sort.endsWith('asc');
+  const key = (sort === 'cd' || sort === 'ca') ? 'createdAt' : 'updatedAt';
+  const asc = sort === 'ca' || sort === 'ma';
   list.sort((a, b) => {
-    const at = new Date(a[key] || 0), bt = new Date(b[key] || 0);
+    const at = new Date(a[key]||0), bt = new Date(b[key]||0);
     return asc ? at - bt : bt - at;
   });
   return list;
 }
 
-// ══════════════════════════════════════════════
-// 렌더링
-// ══════════════════════════════════════════════
+// ═══════════════════════════════════════
+// RENDER ALL
+// ═══════════════════════════════════════
 function renderAll() {
   renderSidebar();
   renderNotes();
   renderStats();
-  renderCatSelect();
+  fillCatSelect();
 }
 
-// SIDEBAR
+// ── SIDEBAR ──
 function renderSidebar() {
   // counts
-  const allCount = notes.length;
-  const trashCount = trashedNotes.length;
-  document.getElementById('cnt-all').textContent = allCount;
-  const trashCnt = document.getElementById('cnt-trash');
-  if (trashCount > 0) { trashCnt.textContent = trashCount; trashCnt.style.display = ''; }
-  else trashCnt.style.display = 'none';
+  document.getElementById('cnt-all').textContent = notes.length;
+  const tc = document.getElementById('cnt-trash');
+  if (trashed.length) { tc.textContent = trashed.length; tc.style.display = ''; }
+  else tc.style.display = 'none';
 
   // nav active
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  if (currentNav === 'all') document.getElementById('nav-all').classList.add('active');
-  else if (currentNav === 'trash') document.getElementById('nav-trash').classList.add('active');
+  document.querySelectorAll('.nav-row').forEach(el => el.classList.remove('active'));
+  if (nav === 'all')   document.getElementById('nav-all').classList.add('active');
+  if (nav === 'trash') document.getElementById('nav-trash').classList.add('active');
 
-  // trash panel
-  document.getElementById('trash-panel').classList.toggle('hidden', currentNav !== 'trash');
+  // trash config panel
+  document.getElementById('trash-cfg-wrap').classList.toggle('hidden', nav !== 'trash');
 
-  // cat list
-  const catList = document.getElementById('cat-list');
-  catList.innerHTML = categories.map((cat, i) => {
-    const colorIdx = i % CAT_COLORS;
-    const count = notes.filter(n => n.category === cat._docId).length;
-    const isActive = currentNav === `cat:${cat._docId}`;
-    return `<div class="cat-item${isActive ? ' active' : ''}" onclick="selectNav('cat:${esc(cat._docId)}')">
-      <span class="cat-dot cd${colorIdx}"></span>
-      <span class="cat-name">${esc(cat.name)}</span>
-      <span class="cat-cnt">${count}</span>
-      <button class="cat-del-btn" onclick="event.stopPropagation();deleteCategory('${esc(cat._docId)}')" title="삭제">✕</button>
+  // cats
+  const wrap = document.getElementById('cat-rows');
+  if (!cats.length) {
+    wrap.innerHTML = `<div style="font-size:11px;color:var(--text3);padding:4px 10px">카테고리가 없습니다.</div>`;
+    return;
+  }
+  wrap.innerHTML = cats.map((c, i) => {
+    const ci    = i % 8;
+    const cnt   = notes.filter(n => n.category === c._id).length;
+    const act   = nav === `cat:${c._id}`;
+    return `<div class="cat-row${act ? ' active' : ''}" onclick="goNav('cat:${e(c._id)}')">
+      <span class="cat-dot dc${ci}"></span>
+      <span class="cat-name">${e(c.name)}</span>
+      <span class="cat-cnt">${cnt}</span>
+      <button class="cat-x" onclick="event.stopPropagation();delCat('${e(c._id)}')" title="삭제">✕</button>
     </div>`;
   }).join('');
 }
 
-// NOTES
+// ── NOTES ──
 function renderNotes() {
-  const container = document.getElementById('notes-container');
-  // update view class
-  container.className = `view-${currentView}`;
-
-  const list = getFilteredSorted();
-  const isTrash = currentNav === 'trash';
+  const wrap = document.getElementById('notes-wrap');
+  wrap.className = `view-${view}`;
+  const list = filtered();
+  const isT  = nav === 'trash';
+  const q    = (document.getElementById('search-inp')?.value||'').trim();
 
   if (!list.length) {
-    const q = (document.getElementById('search-input')?.value || '').trim();
-    container.innerHTML = `<div class="notes-empty">
-      <div class="notes-empty-icon">${isTrash ? '🗑️' : q ? '🔍' : '📭'}</div>
-      <p>${isTrash ? '휴지통이 비어있습니다.' : q ? `'${esc(q)}' 검색 결과 없음` : '메모가 없습니다. 새 메모를 작성해보세요!'}</p>
+    wrap.innerHTML = `<div class="empty">
+      <div class="empty-icon">${isT ? '🗑️' : q ? '🔍' : '📭'}</div>
+      <p>${isT ? '휴지통이 비어있습니다.' : q ? `"${e(q)}" 검색 결과 없음` : '메모가 없습니다. 새 메모를 작성해보세요!'}</p>
     </div>`;
     return;
   }
 
-  if (currentView === 'grid') container.innerHTML = list.map(n => renderCardView(n, isTrash)).join('');
-  else if (currentView === 'list') container.innerHTML = list.map(n => renderListView(n, isTrash)).join('');
-  else container.innerHTML = list.map(n => renderMagazineView(n, isTrash)).join('');
+  if (view === 'grid')     wrap.innerHTML = list.map(n => cardHtml(n, isT)).join('');
+  else if (view === 'list') wrap.innerHTML = list.map(n => listHtml(n, isT)).join('');
+  else                     wrap.innerHTML = list.map(n => magHtml(n, isT)).join('');
 }
 
-// STATS
+// ── STATS ──
 function renderStats() {
-  const list = getFilteredSorted();
-  const bar = document.getElementById('stats-bar');
-  bar.innerHTML = `<span>표시 <strong>${list.length}</strong>개</span>
-    <span>전체 <strong>${notes.length}</strong>개</span>
-    <span>휴지통 <strong>${trashedNotes.length}</strong>개</span>`;
+  const list = filtered();
+  document.getElementById('stats').innerHTML =
+    `<span>표시 <strong>${list.length}</strong>개</span>` +
+    `<span>전체 <strong>${notes.length}</strong>개</span>` +
+    `<span>휴지통 <strong>${trashed.length}</strong>개</span>`;
 }
 
-// CAT SELECT in modal
-function renderCatSelect() {
-  const sel = document.getElementById('note-cat-select');
-  if (!sel) return;
-  const prev = sel.value;
-  sel.innerHTML = `<option value="">카테고리없음</option>` +
-    categories.map(c => `<option value="${esc(c._docId)}">${esc(c.name)}</option>`).join('');
-  if (prev) sel.value = prev;
-}
-
-// PAGE TITLE
-function renderPageTitle() {
-  const el = document.getElementById('page-title');
-  if (currentNav === 'all') el.textContent = '📝 전체 메모';
-  else if (currentNav === 'trash') el.textContent = '🗑️ 휴지통';
-  else {
-    const catId = currentNav.slice(4);
-    const cat = getCatById(catId);
-    el.textContent = cat ? `🗂️ ${cat.name}` : '📝 메모';
+// ── PAGE TITLE ──
+function renderTitle() {
+  const el = document.getElementById('page-hd');
+  if      (nav === 'all')           el.textContent = '📝 전체 메모';
+  else if (nav === 'trash')         el.textContent = '🗑️ 휴지통';
+  else if (nav.startsWith('cat:')) {
+    const c = catById(nav.slice(4));
+    el.textContent = c ? `🗂️ ${c.name}` : '📝 메모';
   }
 }
 
-// ─── CARD VIEW ───
-function renderCardView(n, isTrash) {
-  const catIdx = getCatColorIdx(n.category);
-  const ccClass = catIdx >= 0 ? `cc${catIdx}` : 'cc-none';
-  const catName = getCatById(n.category)?.name || '카테고리없음';
-  const cbClass = catIdx >= 0 ? `cb${catIdx}` : 'cb-none';
-  return `<div class="note-card ${ccClass}" onclick="openDetail('${esc(n._docId)}',${isTrash})">
-    <div class="note-head">
-      <div class="note-title">${esc(n.title||'제목 없음')}</div>
-      <span class="cat-badge ${cbClass}">${esc(catName)}</span>
-    </div>
-    ${n.content ? `<div class="note-body">${esc(n.content)}</div>` : ''}
-    ${renderLinkChips(n.links)}
-    ${renderTagChips(n.tags)}
-    <div class="note-footer">
-      <div class="note-dates">
-        <span>📅 ${fmt(n.createdAt)}</span>
-        ${n.updatedAt && fmt(n.updatedAt) !== fmt(n.createdAt) ? `<span>✏️ ${fmt(n.updatedAt)}</span>` : ''}
-        ${isTrash && n.deletedAt ? `<span style="color:var(--red)">🗑 ${fmt(n.deletedAt)}</span>` : ''}
-      </div>
-      <div class="note-actions">
-        ${isTrash
-          ? `<button class="nact green" onclick="event.stopPropagation();doRestore('${esc(n._docId)}')">복원</button>
-             <button class="nact del" onclick="event.stopPropagation();doPermDelete('${esc(n._docId)}')">완전삭제</button>`
-          : `<button class="nact" onclick="event.stopPropagation();editNote('${esc(n._docId)}')">수정</button>
-             <button class="nact del" onclick="event.stopPropagation();doTrash('${esc(n._docId)}')">삭제</button>`
-        }
-      </div>
-    </div>
-  </div>`;
+// ── CAT SELECT (modal) ──
+function fillCatSelect() {
+  const sel = document.getElementById('e-cat');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = `<option value="">카테고리없음</option>` +
+    cats.map(c => `<option value="${e(c._id)}">${e(c.name)}</option>`).join('');
+  sel.value = prev || '';
 }
 
-// ─── LIST VIEW ───
-function renderListView(n, isTrash) {
-  const catIdx = getCatColorIdx(n.category);
-  const ccClass = catIdx >= 0 ? `cc${catIdx}` : 'cc-none';
-  const cdClass = catIdx >= 0 ? `cd${catIdx}` : 'cd-none';
-  const catName = getCatById(n.category)?.name || '카테고리없음';
-  const cbClass = catIdx >= 0 ? `cb${catIdx}` : 'cb-none';
-  const preview = (n.content || '').replace(/\n/g,' ').slice(0, 80);
-  return `<div class="note-list-item ${ccClass}" onclick="openDetail('${esc(n._docId)}',${isTrash})">
-    <span class="list-cat-dot ${cdClass}"></span>
-    <div class="list-main">
-      <div class="list-title">${esc(n.title||'제목 없음')}</div>
-      ${preview ? `<div class="list-preview">${esc(preview)}</div>` : ''}
-      ${(n.tags||[]).length ? `<div class="list-tags">${(n.tags||[]).slice(0,4).map(t=>`<span class="list-tag">#${esc(t)}</span>`).join('')}</div>` : ''}
-    </div>
-    <div class="list-right">
-      <span class="cat-badge ${cbClass}" style="font-size:9px">${esc(catName)}</span>
-      <span class="list-date">${fmt(n.createdAt)}</span>
-      <div class="list-actions">
-        ${isTrash
-          ? `<button class="nact green" onclick="event.stopPropagation();doRestore('${esc(n._docId)}')">복원</button>
-             <button class="nact del" onclick="event.stopPropagation();doPermDelete('${esc(n._docId)}')">완전삭제</button>`
-          : `<button class="nact" onclick="event.stopPropagation();editNote('${esc(n._docId)}')">수정</button>
-             <button class="nact del" onclick="event.stopPropagation();doTrash('${esc(n._docId)}')">삭제</button>`
-        }
-      </div>
-    </div>
-  </div>`;
+// ═══════════════════════════════════════
+// HTML builders
+// ═══════════════════════════════════════
+function bcc(catId) {    // bar/card color class
+  const i = catColor(catId); return i !== null ? `bc${i}` : 'bc-x';
+}
+function dcc(catId) {    // dot color class
+  const i = catColor(catId); return i !== null ? `dc${i}` : 'dc-x';
+}
+function bdc(catId) {    // badge color class
+  const i = catColor(catId); return i !== null ? `bdc${i}` : 'bdc-x';
+}
+function mbgc(catId) {   // magazine bg color class
+  const i = catColor(catId); return i !== null ? `mbg${i}` : 'mbg-x';
+}
+function catLabel(catId) {
+  return catById(catId)?.name || '카테고리없음';
 }
 
-// ─── MAGAZINE VIEW ───
-function renderMagazineView(n, isTrash) {
-  const catIdx = getCatColorIdx(n.category);
-  const mbgClass = catIdx >= 0 ? `mbg${catIdx}` : 'mbg-none';
-  const ccClass = catIdx >= 0 ? `cc${catIdx}` : 'cc-none';
-  const cbClass = catIdx >= 0 ? `cb${catIdx}` : 'cb-none';
-  const catName = getCatById(n.category)?.name || '카테고리없음';
-  const emoji = getCatEmoji(catIdx);
-  return `<div class="note-magazine ${ccClass}" onclick="openDetail('${esc(n._docId)}',${isTrash})">
-    <div class="mag-header ${mbgClass}">
-      ${emoji}
-      <div class="mag-header-bar" style="${catIdx>=0 ? `background:linear-gradient(90deg,var(--accent),transparent)` : ''}"></div>
-    </div>
-    <div class="mag-body">
-      <div class="note-head">
-        <div class="note-title" style="-webkit-line-clamp:2">${esc(n.title||'제목 없음')}</div>
-        <span class="cat-badge ${cbClass}">${esc(catName)}</span>
-      </div>
-      ${n.content ? `<div class="note-body">${esc(n.content)}</div>` : ''}
-      ${renderLinkChips(n.links)}
-      ${renderTagChips(n.tags)}
-      <div class="note-footer">
-        <div class="note-dates"><span>📅 ${fmt(n.createdAt)}</span></div>
-        <div class="note-actions">
-          ${isTrash
-            ? `<button class="nact green" onclick="event.stopPropagation();doRestore('${esc(n._docId)}')">복원</button>
-               <button class="nact del" onclick="event.stopPropagation();doPermDelete('${esc(n._docId)}')">완전삭제</button>`
-            : `<button class="nact" onclick="event.stopPropagation();editNote('${esc(n._docId)}')">수정</button>
-               <button class="nact del" onclick="event.stopPropagation();doTrash('${esc(n._docId)}')">삭제</button>`
-          }
-        </div>
-      </div>
-    </div>
-  </div>`;
-}
-
-function getCatEmoji(idx) {
-  const emojis = ['💼','🌿','💡','🔮','🌊','🌸','🍀','⭐'];
-  return idx >= 0 ? emojis[idx % emojis.length] : '📝';
-}
-
-// ─── LINK CHIPS ───
-function renderLinkChips(links) {
-  if (!links || !links.length) return '';
-  const valid = links.filter(l => l && l.url);
+function linksHtml(links) {
+  if (!links?.length) return '';
+  const valid = links.filter(l => l?.url);
   if (!valid.length) return '';
-  return `<div class="note-links-row">${valid.map(l => {
-    const favicon = getFaviconUrl(l.url);
-    const label = l.label || getDomain(l.url);
-    return `<a class="link-chip" href="${esc(l.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
-      ${favicon ? `<img class="link-favicon" src="${esc(favicon)}" alt="" onerror="this.style.display='none'">` : '🔗'}
-      <span class="link-label">${esc(label)}</span>
+  return `<div class="n-links">${valid.map(l => {
+    const fav = favicon(l.url);
+    return `<a class="link-chip" href="${e(l.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
+      ${fav ? `<img class="lc-fav" src="${e(fav)}" alt="" onerror="this.style.display='none'">` : '🔗'}
+      <span class="lc-label">${e(l.label || domain(l.url))}</span>
     </a>`;
   }).join('')}</div>`;
 }
 
-function renderTagChips(tags) {
-  if (!tags || !tags.length) return '';
-  return `<div class="note-tags-row">${tags.map(t=>`<span class="note-tag">#${esc(t)}</span>`).join('')}</div>`;
+function tagsHtml(tags) {
+  if (!tags?.length) return '';
+  return `<div class="n-tags">${tags.map(t => `<span class="n-tag">#${e(t)}</span>`).join('')}</div>`;
 }
 
-// ══════════════════════════════════════════════
-// 네비게이션
-// ══════════════════════════════════════════════
-window.selectNav = function(nav) {
-  currentNav = nav;
-  renderPageTitle();
+function actsBtns(id, isT) {
+  if (isT) return `
+    <button class="na green" onclick="event.stopPropagation();doRestore('${id}')">복원</button>
+    <button class="na del"   onclick="event.stopPropagation();doHardDel('${id}')">완전삭제</button>`;
+  return `
+    <button class="na"      onclick="event.stopPropagation();openEdit('${id}')">수정</button>
+    <button class="na del"  onclick="event.stopPropagation();doTrash('${id}')">삭제</button>`;
+}
+
+// ─ Card ─
+function cardHtml(n, isT) {
+  return `<div class="nc ${bcc(n.category)}" onclick="openDet('${n._id}',${isT})">
+    <div class="n-head">
+      <div class="n-title">${e(n.title||'제목 없음')}</div>
+      <span class="n-badge ${bdc(n.category)}">${e(catLabel(n.category))}</span>
+    </div>
+    ${n.content ? `<div class="n-body">${e(n.content)}</div>` : ''}
+    ${linksHtml(n.links)}
+    ${tagsHtml(n.tags)}
+    <div class="n-foot">
+      <div class="n-dates">
+        <span>📅 ${fmt(n.createdAt)}</span>
+        ${n.updatedAt && fmt(n.updatedAt) !== fmt(n.createdAt) ? `<span>✏️ ${fmt(n.updatedAt)}</span>` : ''}
+        ${isT && n.deletedAt ? `<span style="color:var(--red)">🗑 ${fmt(n.deletedAt)}</span>` : ''}
+      </div>
+      <div class="n-acts">${actsBtns(n._id, isT)}</div>
+    </div>
+  </div>`;
+}
+
+// ─ List ─
+function listHtml(n, isT) {
+  const prev = (n.content||'').replace(/\n/g,' ').slice(0, 90);
+  return `<div class="nl ${bcc(n.category)}" onclick="openDet('${n._id}',${isT})">
+    <span class="nl-dot ${dcc(n.category)}"></span>
+    <div class="nl-main">
+      <div class="nl-title">${e(n.title||'제목 없음')}</div>
+      ${prev ? `<div class="nl-prev">${e(prev)}</div>` : ''}
+      ${(n.tags||[]).length ? `<div class="nl-tags">${(n.tags||[]).slice(0,4).map(t=>`<span class="nl-tag">#${e(t)}</span>`).join('')}</div>` : ''}
+    </div>
+    <div class="nl-right">
+      <span class="n-badge ${bdc(n.category)}" style="font-size:9px">${e(catLabel(n.category))}</span>
+      <span class="nl-date">${fmt(n.createdAt)}</span>
+      <div class="nl-acts">${actsBtns(n._id, isT)}</div>
+    </div>
+  </div>`;
+}
+
+// ─ Magazine ─
+function magHtml(n, isT) {
+  const ci = catColor(n.category);
+  const emoji = ci !== null ? MAG_EMOJIS[ci] : '📝';
+  return `<div class="nm ${bcc(n.category)}" onclick="openDet('${n._id}',${isT})">
+    <div class="nm-head ${mbgc(n.category)}">${emoji}
+      <div class="nm-bar" ${ci !== null ? `style="background:linear-gradient(90deg,var(--acc),transparent)"` : ''}></div>
+    </div>
+    <div class="nm-body">
+      <div class="n-head">
+        <div class="n-title">${e(n.title||'제목 없음')}</div>
+        <span class="n-badge ${bdc(n.category)}">${e(catLabel(n.category))}</span>
+      </div>
+      ${n.content ? `<div class="n-body">${e(n.content)}</div>` : ''}
+      ${linksHtml(n.links)}
+      ${tagsHtml(n.tags)}
+      <div class="n-foot">
+        <div class="n-dates"><span>📅 ${fmt(n.createdAt)}</span></div>
+        <div class="n-acts">${actsBtns(n._id, isT)}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════
+// Navigation
+// ═══════════════════════════════════════
+window.goNav = function(target) {
+  nav = target;
+  renderTitle();
   renderAll();
-  // mobile: close sidebar
-  if (window.innerWidth <= 768) closeSidebarMobile();
+  if (window.innerWidth <= 768) closeMobileSb();
 };
 
-// ══════════════════════════════════════════════
-// VIEW MODE
-// ══════════════════════════════════════════════
+// ═══════════════════════════════════════
+// View mode
+// ═══════════════════════════════════════
 window.setView = function(mode) {
-  currentView = mode;
-  ['grid','list','magazine'].forEach(m => {
-    document.getElementById(`vb-${m}`).classList.toggle('active', m === mode);
-  });
+  view = mode;
+  ['grid','list','magazine'].forEach(m =>
+    document.getElementById(`vb-${m}`).classList.toggle('on', m === mode)
+  );
   renderNotes();
 };
 
-// ══════════════════════════════════════════════
-// SIDEBAR TOGGLE
-// ══════════════════════════════════════════════
-let sidebarCollapsed = false;
+// ═══════════════════════════════════════
+// Sidebar toggle
+// ═══════════════════════════════════════
+let sbCollapsed = false;
 
 window.toggleSidebar = function() {
-  const sidebar = document.getElementById('sidebar');
-  const main = document.getElementById('main-content');
+  const sb   = document.getElementById('sidebar');
+  const main = document.getElementById('main');
   if (window.innerWidth <= 768) {
-    // mobile: slide overlay
-    sidebar.classList.toggle('mobile-open');
-    document.getElementById('sidebar-overlay').classList.toggle('show', sidebar.classList.contains('mobile-open'));
+    // Mobile: overlay mode
+    sb.classList.toggle('sb-open');
+    document.getElementById('sb-overlay').classList.toggle('on', sb.classList.contains('sb-open'));
   } else {
-    sidebarCollapsed = !sidebarCollapsed;
-    sidebar.classList.toggle('collapsed', sidebarCollapsed);
-    main.classList.toggle('expanded', sidebarCollapsed);
+    // Desktop: push mode
+    sbCollapsed = !sbCollapsed;
+    sb.classList.toggle('hidden-sb', sbCollapsed);
+    main.classList.toggle('full', sbCollapsed);
   }
 };
-window.closeSidebarMobile = function() {
-  document.getElementById('sidebar').classList.remove('mobile-open');
-  document.getElementById('sidebar-overlay').classList.remove('show');
+window.closeMobileSb = function() {
+  document.getElementById('sidebar').classList.remove('sb-open');
+  document.getElementById('sb-overlay').classList.remove('on');
 };
 
-// ══════════════════════════════════════════════
-// DELETE / RESTORE ACTIONS
-// ══════════════════════════════════════════════
-window.doTrash = async function(docId) {
-  const n = notes.find(x => x._docId === docId);
+// ═══════════════════════════════════════
+// EDIT MODAL
+// ═══════════════════════════════════════
+window.openAdd = function() {
+  editId = null; eTags = []; eLinks = [];
+  document.getElementById('edit-title-lbl').textContent = '새 메모';
+  document.getElementById('e-title').value   = '';
+  document.getElementById('e-content').value = '';
+  fillCatSelect();
+  // pre-select category if in cat nav
+  if (nav.startsWith('cat:')) document.getElementById('e-cat').value = nav.slice(4);
+  renderTagPre();
+  renderLinkRows();
+  document.getElementById('edit-overlay').classList.add('on');
+  setTimeout(() => document.getElementById('e-title').focus(), 80);
+};
+
+window.openEdit = function(id) {
+  const n = notes.find(x => x._id === id);
   if (!n) return;
-  if (!confirm(`"${n.title||'이 메모'}"를 휴지통으로 이동하시겠습니까?`)) return;
-  try {
-    await moveToTrash(docId);
-    closeDetailModal();
-    renderAll();
-    showToast('휴지통으로 이동했습니다.', 'success');
-  } catch(e) { showToast('오류: ' + e.message, 'error'); }
+  editId = id; eTags = [...(n.tags||[])]; eLinks = (n.links||[]).map(l => ({...l}));
+  document.getElementById('edit-title-lbl').textContent = '메모 수정';
+  document.getElementById('e-title').value   = n.title   || '';
+  document.getElementById('e-content').value = n.content || '';
+  fillCatSelect();
+  document.getElementById('e-cat').value = n.category || '';
+  renderTagPre();
+  renderLinkRows();
+  document.getElementById('edit-overlay').classList.add('on');
+  closeDet();
 };
 
-window.doRestore = async function(docId) {
-  try {
-    await restoreNote(docId);
-    closeDetailModal();
-    renderAll();
-    showToast('복원되었습니다.', 'success');
-  } catch(e) { showToast('오류: ' + e.message, 'error'); }
-};
-
-window.doPermDelete = async function(docId) {
-  if (!confirm('완전히 삭제합니다. 복구할 수 없습니다. 계속하시겠습니까?')) return;
-  try {
-    await permanentDelete(docId);
-    closeDetailModal();
-    renderAll();
-    showToast('영구 삭제되었습니다.', 'success');
-  } catch(e) { showToast('오류: ' + e.message, 'error'); }
-};
-
-// ══════════════════════════════════════════════
-// ADD / EDIT MODAL
-// ══════════════════════════════════════════════
-window.openAddModal = function() {
-  editingDocId = null;
-  editTags = [];
-  editLinks = [];
-  document.getElementById('modal-title').textContent = '새 메모';
-  document.getElementById('note-title-input').value = '';
-  document.getElementById('note-content-input').value = '';
-  renderCatSelect();
-  // pre-select current category if in cat nav
-  if (currentNav.startsWith('cat:')) {
-    document.getElementById('note-cat-select').value = currentNav.slice(4);
-  } else {
-    document.getElementById('note-cat-select').value = '';
-  }
-  renderTagPreview();
-  renderLinksList();
-  document.getElementById('edit-modal').classList.add('open');
-  setTimeout(() => document.getElementById('note-title-input').focus(), 100);
-};
-
-window.editNote = function(docId) {
-  const n = notes.find(x => x._docId === docId);
-  if (!n) return;
-  editingDocId = docId;
-  editTags = [...(n.tags||[])];
-  editLinks = (n.links||[]).map(l => ({...l}));
-  document.getElementById('modal-title').textContent = '메모 수정';
-  document.getElementById('note-title-input').value = n.title||'';
-  document.getElementById('note-content-input').value = n.content||'';
-  renderCatSelect();
-  document.getElementById('note-cat-select').value = n.category||'';
-  renderTagPreview();
-  renderLinksList();
-  document.getElementById('edit-modal').classList.add('open');
-  closeDetailModal();
-};
-
-window.closeModal = function() {
-  document.getElementById('edit-modal').classList.remove('open');
-};
+window.closeEdit = function() { document.getElementById('edit-overlay').classList.remove('on'); };
+window.closeEditIfBg = function(ev) { if (ev.target.id === 'edit-overlay') closeEdit(); };
 
 window.saveNote = async function() {
-  const title = document.getElementById('note-title-input').value.trim();
-  const content = document.getElementById('note-content-input').value.trim();
-  const category = document.getElementById('note-cat-select').value;
-  if (!title) { showToast('제목을 입력해주세요.', 'error'); return; }
-  const contentTags = extractTags(content);
-  const finalTags = [...new Set([...editTags, ...contentTags])];
-  const data = { title, content, category, tags: finalTags, links: editLinks.filter(l => l && l.url) };
+  const title    = document.getElementById('e-title').value.trim();
+  const content  = document.getElementById('e-content').value.trim();
+  const category = document.getElementById('e-cat').value;
+  if (!title) { showToast('제목을 입력해주세요.', 'wrn'); document.getElementById('e-title').focus(); return; }
+  const allTags = [...new Set([...eTags, ...extractTags(content)])];
+  const data    = { title, content, category, tags: allTags, links: eLinks.filter(l => l?.url) };
   try {
-    if (editingDocId) { await updateNote(editingDocId, data); showToast('수정되었습니다.', 'success'); }
-    else { await addNote(data); showToast('저장되었습니다.', 'success'); }
-    closeModal();
+    if (editId) { await updateNoteDoc(editId, data); showToast('수정되었습니다. ✅'); }
+    else        { await createNote(data);             showToast('저장되었습니다. ✅'); }
+    closeEdit();
     renderAll();
-  } catch(e) { showToast('저장 실패: ' + e.message, 'error'); }
+  } catch(err) { showToast('저장 실패: ' + err.message, 'err'); }
 };
 
-window.handleOverlayClick = function(e, id) {
-  if (e.target.id === id) {
-    if (id === 'edit-modal') closeModal();
-    else closeDetailModal();
-  }
-};
-
-// Content auto tag extraction
-document.getElementById('note-content-input').addEventListener('input', function() {
+// Content → auto-tag
+document.getElementById('e-content').addEventListener('input', function() {
   const tags = extractTags(this.value);
-  tags.forEach(t => { if (!editTags.includes(t)) editTags.push(t); });
-  renderTagPreview();
+  tags.forEach(t => { if (!eTags.includes(t)) eTags.push(t); });
+  renderTagPre();
 });
 
-// ── LINKS ──
-window.addLinkRow = function() {
-  editLinks.push({ label: '', url: '' });
-  renderLinksList();
+// ─ Link management ─
+window.addLink = function() {
+  eLinks.push({ label: '', url: '' });
+  renderLinkRows();
+  // focus the new URL input
+  setTimeout(() => {
+    const rows = document.querySelectorAll('.link-row-url');
+    if (rows.length) rows[rows.length-1].focus();
+  }, 50);
 };
 
-function renderLinksList() {
-  const container = document.getElementById('links-list');
-  container.innerHTML = editLinks.map((l, i) => {
-    const favicon = l.url ? getFaviconUrl(l.url) : '';
-    return `<div class="link-input-row">
-      ${favicon ? `<img class="link-input-favicon" src="${esc(favicon)}" alt="" onerror="this.src=''">` : '<span style="font-size:14px">🔗</span>'}
-      <input type="text" placeholder="표시 이름" value="${esc(l.label)}" style="max-width:130px"
-        oninput="editLinks[${i}].label=this.value">
-      <span class="link-input-sep">|</span>
-      <input type="url" placeholder="https://..." value="${esc(l.url)}"
-        oninput="editLinks[${i}].url=this.value;updateFavicon(${i},this.value)">
-      <button class="link-del-btn" onclick="removeLink(${i})">✕</button>
+function renderLinkRows() {
+  const wrap = document.getElementById('link-rows');
+  wrap.innerHTML = eLinks.map((l, i) => {
+    const fav = l.url ? favicon(l.url) : '';
+    return `<div class="link-row-wrap">
+      ${fav ? `<img class="lr-fav" src="${e(fav)}" alt="" onerror="this.style.display='none'">` : '<span style="font-size:15px;flex-shrink:0">🔗</span>'}
+      <input type="text"  placeholder="표시 이름 (선택)" value="${e(l.label)}" style="max-width:130px"
+             oninput="eLinks[${i}].label=this.value">
+      <span class="lr-sep">|</span>
+      <input class="link-row-url" type="url" placeholder="https://..." value="${e(l.url)}"
+             oninput="eLinks[${i}].url=this.value;debounceFav(${i})">
+      <button class="lr-del" onclick="removeLink(${i})">✕</button>
     </div>`;
   }).join('');
 }
 
-window.updateFavicon = function(i, url) {
-  // debounce favicon update
-  clearTimeout(window._favTimer);
-  window._favTimer = setTimeout(() => renderLinksList(), 800);
+let favTimer;
+window.debounceFav = function(i) {
+  clearTimeout(favTimer);
+  favTimer = setTimeout(() => renderLinkRows(), 900);
 };
+window.removeLink = function(i) { eLinks.splice(i, 1); renderLinkRows(); };
 
-window.removeLink = function(i) {
-  editLinks.splice(i, 1);
-  renderLinksList();
-};
-
-// ── TAGS ──
-function renderTagPreview() {
-  const el = document.getElementById('tag-preview');
-  if (!editTags.length) {
-    el.innerHTML = '<span style="font-size:11px;color:var(--text3)">내용에 #태그를 입력하면 자동으로 표시됩니다</span>';
+// ─ Tag management ─
+function renderTagPre() {
+  const el = document.getElementById('tag-pre');
+  if (!eTags.length) {
+    el.innerHTML = `<span style="font-size:11px;color:var(--text3)">내용에 #태그를 입력하면 자동으로 표시됩니다</span>`;
     return;
   }
-  el.innerHTML = editTags.map((t, i) =>
-    `<span class="tag-item">#${esc(t)} <span class="tag-remove" onclick="removeTag(${i})">✕</span></span>`
+  el.innerHTML = eTags.map((t, i) =>
+    `<span class="tag-chip">#${e(t)} <span class="tag-del" onclick="removeTag(${i})">✕</span></span>`
   ).join('');
 }
+window.removeTag = function(i) { eTags.splice(i, 1); renderTagPre(); };
 
-window.removeTag = function(i) {
-  editTags.splice(i, 1);
-  renderTagPreview();
-};
-
-// ══════════════════════════════════════════════
+// ═══════════════════════════════════════
 // DETAIL MODAL
-// ══════════════════════════════════════════════
-window.openDetail = function(docId, isTrash=false) {
-  const list = isTrash ? trashedNotes : notes;
-  const n = list.find(x => x._docId === docId);
+// ═══════════════════════════════════════
+window.openDet = function(id, isT = false) {
+  const pool = isT ? trashed : notes;
+  const n    = pool.find(x => x._id === id);
   if (!n) return;
-  const catIdx = getCatColorIdx(n.category);
-  const cbClass = catIdx >= 0 ? `cb${catIdx}` : 'cb-none';
-  const catName = getCatById(n.category)?.name || '카테고리없음';
-  const linksHtml = (n.links||[]).filter(l=>l&&l.url).length
-    ? `<div style="display:flex;flex-wrap:wrap;gap:8px">${(n.links||[]).filter(l=>l&&l.url).map(l => {
-        const fav = getFaviconUrl(l.url);
-        return `<a class="detail-link-card" href="${esc(l.url)}" target="_blank" rel="noopener">
-          ${fav ? `<img src="${esc(fav)}" alt="" onerror="this.style.display='none'">` : '🔗'}
-          <div class="detail-link-info">
-            <div class="detail-link-label">${esc(l.label||getDomain(l.url))}</div>
-            <div class="detail-link-url">${esc(getDomain(l.url))}</div>
-          </div>
-        </a>`;
-      }).join('')}</div>` : '';
 
-  document.getElementById('detail-title').textContent = n.title || '제목 없음';
-  document.getElementById('detail-body').innerHTML = `
-    <span class="cat-badge ${cbClass}" style="width:fit-content">${esc(catName)}</span>
-    ${n.content ? `<div class="detail-content">${esc(n.content)}</div>` : ''}
-    ${linksHtml}
-    ${(n.tags||[]).length ? `<div class="note-tags-row">${(n.tags||[]).map(t=>`<span class="note-tag">#${esc(t)}</span>`).join('')}</div>` : ''}
-    <div class="detail-meta">
+  document.getElementById('det-title').textContent = n.title || '제목 없음';
+
+  const linkCards = (n.links||[]).filter(l => l?.url).map(l => {
+    const fav = favicon(l.url);
+    return `<a class="det-link" href="${e(l.url)}" target="_blank" rel="noopener">
+      ${fav ? `<img src="${e(fav)}" alt="" onerror="this.style.display='none'">` : '🔗'}
+      <div class="det-link-info">
+        <div class="det-link-name">${e(l.label || domain(l.url))}</div>
+        <div class="det-link-url">${e(domain(l.url))}</div>
+      </div>
+    </a>`;
+  }).join('');
+
+  document.getElementById('det-body').innerHTML = `
+    <span class="n-badge ${bdc(n.category)}" style="width:fit-content">${e(catLabel(n.category))}</span>
+    ${n.content ? `<div class="det-content">${e(n.content)}</div>` : ''}
+    ${linkCards ? `<div style="display:flex;flex-wrap:wrap;gap:8px">${linkCards}</div>` : ''}
+    ${tagsHtml(n.tags)}
+    <div class="det-meta">
       <span>📅 작성: ${fmt(n.createdAt)}</span>
       <span>✏️ 수정: ${fmt(n.updatedAt)}</span>
-      ${isTrash && n.deletedAt ? `<span style="color:var(--red)">🗑 삭제: ${fmt(n.deletedAt)}</span>` : ''}
+      ${isT && n.deletedAt ? `<span style="color:var(--red)">🗑 삭제: ${fmt(n.deletedAt)}</span>` : ''}
     </div>`;
 
-  const footer = document.getElementById('detail-footer');
-  if (isTrash) {
-    footer.innerHTML = `
-      <button class="btn btn-ghost" onclick="closeDetailModal()">닫기</button>
-      <button class="btn btn-ghost" style="color:var(--green);border-color:rgba(0,200,150,.3)" onclick="doRestore('${esc(docId)}')">🔄 복원</button>
-      <button class="btn btn-danger" onclick="doPermDelete('${esc(docId)}')">🗑 완전삭제</button>`;
-  } else {
-    footer.innerHTML = `
-      <button class="btn btn-ghost" onclick="closeDetailModal()">닫기</button>
-      <button class="btn btn-ghost" onclick="doTrash('${esc(docId)}')">🗑 삭제</button>
-      <button class="btn btn-primary" onclick="editNote('${esc(docId)}')">✏️ 수정</button>`;
-  }
+  document.getElementById('det-foot').innerHTML = isT
+    ? `<button class="btn btn-g"   onclick="closeDet()">닫기</button>
+       <button class="btn btn-g"   style="color:var(--green);border-color:rgba(0,200,150,.3)" onclick="doRestore('${id}')">🔄 복원</button>
+       <button class="btn btn-d"   onclick="doHardDel('${id}')">🗑 완전삭제</button>`
+    : `<button class="btn btn-g"   onclick="closeDet()">닫기</button>
+       <button class="btn btn-g"   onclick="doTrash('${id}')">🗑 삭제</button>
+       <button class="btn btn-p"   onclick="openEdit('${id}')">✏️ 수정</button>`;
 
-  document.getElementById('detail-modal').classList.add('open');
+  document.getElementById('det-overlay').classList.add('on');
 };
+window.closeDet = function() { document.getElementById('det-overlay').classList.remove('on'); };
+window.closeDetIfBg = function(ev) { if (ev.target.id === 'det-overlay') closeDet(); };
 
-window.closeDetailModal = function() {
-  document.getElementById('detail-modal').classList.remove('open');
-};
+// ═══════════════════════════════════════
+// Search / Sort
+// ═══════════════════════════════════════
+document.getElementById('search-inp').addEventListener('input', () => { renderNotes(); renderStats(); });
+document.getElementById('sort-sel').addEventListener('change', () => renderNotes());
 
-// ══════════════════════════════════════════════
-// 검색 & 정렬
-// ══════════════════════════════════════════════
-document.getElementById('search-input').addEventListener('input', () => { renderNotes(); renderStats(); });
-document.getElementById('sort-select').addEventListener('change', () => renderNotes());
-
-// ══════════════════════════════════════════════
-// 유틸
-// ══════════════════════════════════════════════
+// ═══════════════════════════════════════
+// Utilities
+// ═══════════════════════════════════════
 function fmt(d) {
   if (!d) return '-';
   const dt = d instanceof Date ? d : new Date(d);
   if (isNaN(dt)) return '-';
-  const p = n => String(n).padStart(2,'0');
+  const p = n => String(n).padStart(2, '0');
   return `${dt.getFullYear()}.${p(dt.getMonth()+1)}.${p(dt.getDate())} ${p(dt.getHours())}:${p(dt.getMinutes())}`;
 }
 
-function esc(s) {
-  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+// HTML escape
+function e(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
-window.esc = esc;
+window.e = e; // expose for inline HTML
 
 function setSyncStatus(state) {
-  const el = document.getElementById('sync-status');
-  if (state==='ok'){el.textContent='🔥 연결됨';el.className='sync-status sync-ok';}
-  else if(state==='loading'){el.textContent='⏳ 동기화 중...';el.className='sync-status sync-loading';}
-  else{el.textContent='❌ 오류';el.className='sync-status sync-error';}
+  const el = document.getElementById('sync-badge');
+  if      (state==='ok')  { el.textContent='🔥 연결됨';    el.className='sync-badge s-ok'; }
+  else if (state==='ing') { el.textContent='⏳ 동기화 중...'; el.className='sync-badge s-ing'; }
+  else                    { el.textContent='❌ 오류';       el.className='sync-badge s-err'; }
 }
 
-function showToast(msg, type='success') {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.className = `toast ${type} show`;
-  setTimeout(() => t.classList.remove('show'), 3500);
+function showToast(msg, type='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3200);
 }
-window.showToast = showToast;
 
-// ══════════════════════════════════════════════
-// Google 인증
-// ══════════════════════════════════════════════
-window.googleLogin = async () => {
-  try { await signInWithPopup(auth, provider); }
-  catch(e) { if (e.code !== 'auth/popup-closed-by-user') alert('로그인 실패: ' + e.message); }
+// ═══════════════════════════════════════
+// Google Auth
+// ═══════════════════════════════════════
+window.googleLogin = async function() {
+  try { await signInWithPopup(auth, gProvider); }
+  catch(err) { if (err.code !== 'auth/popup-closed-by-user') alert('로그인 실패: ' + err.message); }
 };
-window.googleLogout = async () => {
+window.googleLogout = async function() {
   if (confirm('로그아웃 하시겠습니까?')) await signOut(auth);
 };
 
-// ══════════════════════════════════════════════
-// 초기화
-// ══════════════════════════════════════════════
+// ═══════════════════════════════════════
+// Auth state → init
+// ═══════════════════════════════════════
 onAuthStateChanged(auth, async (user) => {
-  const loginScreen   = document.getElementById('login-screen');
-  const loadingScreen = document.getElementById('loading-screen');
+  const loginEl   = document.getElementById('login-screen');
+  const loadingEl = document.getElementById('loading-screen');
+
   if (user) {
-    currentUser = user;
-    loginScreen.classList.add('hidden');
-    loadingScreen.classList.remove('hidden');
-    const userBtn = document.getElementById('user-btn');
-    const logoutBtn = document.getElementById('logout-btn');
-    userBtn.style.display = 'flex';
-    logoutBtn.style.display = 'block';
-    document.getElementById('user-name').textContent = user.displayName || user.email;
-    const avatarEl = document.getElementById('user-avatar');
-    const fallbackEl = document.getElementById('user-avatar-fallback');
-    if (user.photoURL) { avatarEl.src = user.photoURL; avatarEl.style.display = 'block'; fallbackEl.style.display = 'none'; }
-    else { fallbackEl.textContent = (user.displayName||user.email||'?')[0].toUpperCase(); }
+    me = user;
+    loginEl.classList.add('hidden');
+    loadingEl.classList.remove('hidden');
+
+    // User UI
+    document.getElementById('user-chip').style.display  = 'flex';
+    document.getElementById('logout-btn').style.display = 'block';
+    document.getElementById('u-name').textContent = user.displayName || user.email || '';
+    const av = document.getElementById('u-avatar');
+    const fb = document.getElementById('u-fallback');
+    if (user.photoURL) { av.src = user.photoURL; av.style.display = 'block'; fb.style.display = 'none'; }
+    else { fb.textContent = (user.displayName || user.email || '?')[0].toUpperCase(); }
+
     await loadAll();
-    loadingScreen.classList.add('hidden');
-    renderPageTitle();
+    loadingEl.classList.add('hidden');
+    renderTitle();
     renderAll();
   } else {
-    currentUser = null; notes = []; trashedNotes = []; categories = [];
-    loadingScreen.classList.add('hidden');
-    loginScreen.classList.remove('hidden');
-    document.getElementById('user-btn').style.display = 'none';
+    me = null; notes = []; trashed = []; cats = [];
+    loadingEl.classList.add('hidden');
+    loginEl.classList.remove('hidden');
+    document.getElementById('user-chip').style.display  = 'none';
     document.getElementById('logout-btn').style.display = 'none';
   }
 });
