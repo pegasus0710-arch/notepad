@@ -67,7 +67,7 @@ a{text-decoration:none;}
 .hsrch-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--t3);font-size:14px;pointer-events:none;}
 .hright{margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0;}
 .vgrp{display:flex;background:rgba(255,255,255,.05);border:1px solid var(--bd);border-radius:8px;padding:3px;gap:2px;}
-.vbtn{width:28px;height:28px;border-radius:6px;border:none;background:transparent;color:var(--t3);font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.2s;}
+.vbtn{width:30px;height:30px;border-radius:6px;border:none;background:transparent;color:var(--t3);font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.2s;}
 .vbtn:hover{color:var(--t2);}
 .vbtn.on{background:var(--acc);color:#fff;}
 .hsort{padding:7px 9px;background:rgba(255,255,255,.06);border:1px solid var(--bd);border-radius:var(--r);color:var(--t2);font-size:12px;outline:none;cursor:pointer;}
@@ -390,12 +390,45 @@ select.fc option{background:var(--card2);}
     </div>
     <div class="hright">
       <div class="vgrp">
-        <button class="vbtn on" id="vb-grid"     title="카드형">⊞</button>
-        <button class="vbtn"    id="vb-list"     title="목록형">≡</button>
-        <button class="vbtn"    id="vb-magazine" title="매거진형">❏</button>
-        <button class="vbtn"    id="vb-compact"  title="컴팩트">▤</button>
-        <button class="vbtn"    id="vb-timeline" title="타임라인">◫</button>
-        <button class="vbtn"    id="vb-kanban"   title="칸반">⊟</button>
+        <button class="vbtn on" id="vb-grid" title="카드형">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+            <rect x="1" y="1" width="5" height="5" rx="1"/><rect x="8" y="1" width="5" height="5" rx="1"/>
+            <rect x="1" y="8" width="5" height="5" rx="1"/><rect x="8" y="8" width="5" height="5" rx="1"/>
+          </svg>
+        </button>
+        <button class="vbtn" id="vb-list" title="목록형">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+            <rect x="1" y="2" width="12" height="2" rx="1"/><rect x="1" y="6" width="12" height="2" rx="1"/>
+            <rect x="1" y="10" width="12" height="2" rx="1"/>
+          </svg>
+        </button>
+        <button class="vbtn" id="vb-magazine" title="매거진형">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+            <rect x="1" y="1" width="5" height="8" rx="1"/><rect x="8" y="1" width="5" height="4" rx="1"/>
+            <rect x="8" y="7" width="5" height="2" rx="1"/><rect x="8" y="11" width="5" height="2" rx="1"/>
+          </svg>
+        </button>
+        <button class="vbtn" id="vb-compact" title="컴팩트">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+            <rect x="1" y="1.5" width="12" height="1.5" rx=".75"/><rect x="1" y="4.5" width="12" height="1.5" rx=".75"/>
+            <rect x="1" y="7.5" width="12" height="1.5" rx=".75"/><rect x="1" y="10.5" width="12" height="1.5" rx=".75"/>
+          </svg>
+        </button>
+        <button class="vbtn" id="vb-timeline" title="타임라인">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+            <circle cx="3" cy="3" r="1.5"/><rect x="5.5" y="2" width="7" height="2" rx="1"/>
+            <circle cx="3" cy="7" r="1.5"/><rect x="5.5" y="6" width="5" height="2" rx="1"/>
+            <circle cx="3" cy="11" r="1.5"/><rect x="5.5" y="10" width="6" height="2" rx="1"/>
+            <line x1="3" y1="4.5" x2="3" y2="5.5" stroke="currentColor" stroke-width="1.5"/>
+            <line x1="3" y1="8.5" x2="3" y2="9.5" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </button>
+        <button class="vbtn" id="vb-kanban" title="칸반">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+            <rect x="1" y="1" width="3.5" height="9" rx="1"/><rect x="5.25" y="1" width="3.5" height="6" rx="1"/>
+            <rect x="9.5" y="1" width="3.5" height="11" rx="1"/>
+          </svg>
+        </button>
       </div>
       <select class="hsort" id="sort-sel">
         <option value="cd">📅 최신 작성순</option>
