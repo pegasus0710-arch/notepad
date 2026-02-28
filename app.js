@@ -9,12 +9,13 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChang
 // Firebase 설정 (본인 설정으로 교체)
 // ══════════════════════════════════════════════
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyComDAR1eCbTfzB9LTdS211DSSHp1PXIPk",
+  authDomain: "notepad-e6a66.firebaseapp.com",
+  projectId: "notepad-e6a66",
+  storageBucket: "notepad-e6a66.firebasestorage.app",
+  messagingSenderId: "739275664534",
+  appId: "1:739275664534:web:8368fdffb5d8f3d67da6b7",
+  measurementId: "G-GN1FNHRGBE"
 };
 const fbApp = initializeApp(firebaseConfig);
 const db    = getFirestore(fbApp);
