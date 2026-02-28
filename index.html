@@ -140,6 +140,57 @@ a{text-decoration:none;}
 .vlist{display:flex;flex-direction:column;gap:7px;}
 .vmag{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:18px;}
 
+/* ── COMPACT VIEW ── */
+.vcompact{display:flex;flex-direction:column;gap:2px;}
+.nco{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:8px;background:var(--card);border:1px solid transparent;cursor:pointer;transition:.15s;position:relative;overflow:hidden;}
+.nco::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;}
+.nco:hover{border-color:var(--bd);background:var(--card2);}
+.nco-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.nco-title{flex:1;font-size:12px;font-weight:600;color:var(--t);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.nco-badge{font-size:9px;font-weight:600;padding:1px 6px;border-radius:4px;flex-shrink:0;}
+.nco-date{font-size:10px;color:var(--t3);white-space:nowrap;flex-shrink:0;}
+.nco-acts{display:flex;gap:3px;flex-shrink:0;opacity:0;transition:.15s;}
+.nco:hover .nco-acts{opacity:1;}
+
+/* ── TIMELINE VIEW ── */
+.vtimeline{display:flex;flex-direction:column;gap:0;}
+.tl-group{margin-bottom:24px;}
+.tl-date-hd{display:flex;align-items:center;gap:10px;margin-bottom:12px;position:sticky;top:0;z-index:10;padding:6px 0;background:var(--bg);}
+.tl-date-line{flex:1;height:1px;background:var(--bd);}
+.tl-date-lbl{font-size:11px;font-weight:700;color:var(--t3);white-space:nowrap;padding:3px 10px;background:var(--bg3);border:1px solid var(--bd);border-radius:20px;}
+.tl-items{display:flex;flex-direction:column;gap:7px;padding-left:16px;border-left:2px solid var(--bd);margin-left:6px;}
+.tl-dot-wrap{position:relative;}
+.tl-dot-wrap::before{content:'';position:absolute;left:-21px;top:14px;width:8px;height:8px;border-radius:50%;background:var(--acc);border:2px solid var(--bg);}
+
+/* ── KANBAN VIEW ── */
+.vkanban-wrap{display:flex;gap:14px;overflow-x:auto;padding-bottom:16px;align-items:flex-start;min-height:200px;}
+.vkanban-wrap::-webkit-scrollbar{height:6px;}
+.kb-col{flex-shrink:0;width:260px;background:var(--bg2);border:1px solid var(--bd);border-radius:var(--rl);overflow:hidden;}
+.kb-col-hd{padding:12px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--bg2);}
+.kb-col-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.kb-col-name{font-size:12px;font-weight:700;color:var(--t);flex:1;}
+.kb-col-cnt{font-size:10px;padding:1px 7px;border-radius:10px;background:var(--bg3);color:var(--t3);}
+.kb-col-bar{height:3px;width:100%;}
+.kb-items{padding:10px;display:flex;flex-direction:column;gap:7px;min-height:80px;}
+.kb-card{background:var(--card);border:1px solid var(--bd);border-radius:var(--r);padding:11px;cursor:pointer;transition:.18s;animation:fi .2s ease;}
+.kb-card:hover{border-color:var(--bd2);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.35);}
+.kb-title{font-size:12px;font-weight:700;color:var(--t);line-height:1.4;margin-bottom:5px;}
+.kb-prev{font-size:11px;color:var(--t3);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5;margin-bottom:6px;}
+.kb-foot{display:flex;align-items:center;justify-content:space-between;font-size:10px;color:var(--t3);}
+.kb-acts{display:flex;gap:3px;opacity:0;transition:.15s;}
+.kb-card:hover .kb-acts{opacity:1;}
+
+/* ── LINK PREVIEW THUMBNAIL ── */
+.lprev{display:flex;flex-direction:column;border-radius:9px;overflow:hidden;border:1px solid var(--bd);background:var(--bg3);margin-top:2px;transition:.18s;cursor:pointer;text-decoration:none;}
+.lprev:hover{border-color:var(--bd2);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.3);}
+.lprev-img{width:100%;height:120px;object-fit:cover;background:var(--bg3);display:block;}
+.lprev-img-ph{width:100%;height:80px;background:linear-gradient(135deg,var(--bg3),var(--bd));display:flex;align-items:center;justify-content:center;font-size:28px;}
+.lprev-info{padding:9px 12px;display:flex;flex-direction:column;gap:3px;}
+.lprev-title{font-size:12px;font-weight:600;color:var(--t);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lprev-desc{font-size:11px;color:var(--t3);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5;}
+.lprev-url{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--t3);margin-top:2px;}
+.lprev-fav{width:12px;height:12px;border-radius:2px;}
+
 /* empty */
 .empty{grid-column:1/-1;text-align:center;padding:80px 24px;color:var(--t3);}
 .empty-icon{font-size:52px;margin-bottom:14px;}
@@ -340,6 +391,9 @@ select.fc option{background:var(--card2);}
         <button class="vbtn on" id="vb-grid"     title="카드형">⊞</button>
         <button class="vbtn"    id="vb-list"     title="목록형">≡</button>
         <button class="vbtn"    id="vb-magazine" title="매거진형">❏</button>
+        <button class="vbtn"    id="vb-compact"  title="컴팩트">▤</button>
+        <button class="vbtn"    id="vb-timeline" title="타임라인">◫</button>
+        <button class="vbtn"    id="vb-kanban"   title="칸반">⊟</button>
       </div>
       <select class="hsort" id="sort-sel">
         <option value="cd">📅 최신 작성순</option>

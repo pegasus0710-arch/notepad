@@ -17,13 +17,13 @@ import {
 // Firebase 설정 (본인 프로젝트 값)
 // ══════════════════════════════════════════════════════
 const firebaseConfig = {
-  apiKey: "AIzaSyComDARleCbTfzB9LTdS211DSSHp1PXIPk",
-  authDomain: "notepad-e6a66.firebaseapp.com",
-  projectId: "notepad-e6a66",
-  storageBucket: "notepad-e6a66.firebasestorage.app",
+  apiKey:            "AIzaSyComDARleCbTfzB9LTdS211DSSHp1PXIPk",
+  authDomain:        "notepad-e6a66.firebaseapp.com",
+  projectId:         "notepad-e6a66",
+  storageBucket:     "notepad-e6a66.firebasestorage.app",
   messagingSenderId: "739275664534",
-  appId: "1:739275664534:web:8368fdffb5d8f3d67da6b7",
-  measurementId: "G-GN1FNHRGBE"
+  appId:             "1:739275664534:web:8368fdffb5d8f3d67da6b7",
+  measurementId:     "G-GN1FNHRGBE"
 };
 
 const app      = initializeApp(firebaseConfig);
@@ -426,7 +426,8 @@ function renderNotes() {
   const htmlFn = view === 'grid' ? cardHtml : view === 'list' ? listHtml : magHtml;
   wrap.innerHTML = list.map(n => htmlFn(n, isT)).join('');
 
-  // 메모 클릭 이벤트 위임
+  // 메모 클릭 이벤트 위임 (kanban은 자체 처리)
+  if (view === 'kanban') return;
   wrap.querySelectorAll('[data-note-id]').forEach(el => {
     el.addEventListener('click', (e) => {
       const id  = el.dataset.noteId;
@@ -475,13 +476,187 @@ function actBtns(id, isT) {
     <button class="na del" data-btn="trash">삭제</button>`;
 }
 
+// ─────────────────────────────────────────
+// COMPACT VIEW
+// ─────────────────────────────────────────
+function compactHtml(n, isT) {
+  return `<div class="nco ${barCls(n.category)}" data-note-id="${n._id}" data-istrash="${isT?'1':'0'}">
+    <span class="nco-dot ${dotCls(n.category)}"></span>
+    <span class="nco-title">${esc(n.title || '제목 없음')}</span>
+    ${(n.tags||[]).length ? `<span class="nco-badge bdX" style="font-size:9px">#${esc(n.tags[0])}</span>` : ''}
+    <span class="nco-badge ${badgeCls(n.category)}">${esc(catLabel(n.category))}</span>
+    <span class="nco-date">${fmtShort(n.createdAt)}</span>
+    <div class="nco-acts">${actBtns(n._id, isT)}</div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────
+// TIMELINE VIEW
+// ─────────────────────────────────────────
+function timelineHtml(list, isT) {
+  if (!list.length) return '';
+  // 날짜별 그룹핑
+  const groups = new Map();
+  list.forEach(n => {
+    const d = n.createdAt ? new Date(n.createdAt) : new Date();
+    const key = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(n);
+  });
+  let html = '';
+  groups.forEach((items, dateKey) => {
+    const today = fmtShort(new Date()) === dateKey;
+    const label = today ? `📅 오늘 · ${dateKey}` : `📅 ${dateKey}`;
+    html += `<div class="tl-group">
+      <div class="tl-date-hd">
+        <div class="tl-date-line"></div>
+        <span class="tl-date-lbl">${label}</span>
+        <div class="tl-date-line"></div>
+      </div>
+      <div class="tl-items">
+        ${items.map(n => `<div class="tl-dot-wrap">${cardHtml(n, isT)}</div>`).join('')}
+      </div>
+    </div>`;
+  });
+  return html;
+}
+
+// ─────────────────────────────────────────
+// KANBAN VIEW
+// ─────────────────────────────────────────
+function renderKanban(wrap, list, isT) {
+  wrap.className = '';
+  wrap.style.cssText = '';
+
+  // 카테고리별 그룹 + 미분류
+  const cols = [];
+  cats.forEach((c, i) => {
+    const items = list.filter(n => n.category === c._id);
+    cols.push({ id: c._id, name: c.name, ci: i % 8, items });
+  });
+  const uncat = list.filter(n => !n.category || !cats.find(c => c._id === n.category));
+  if (uncat.length) cols.push({ id: '', name: '카테고리없음', ci: -1, items: uncat });
+
+  const barColors = [
+    'linear-gradient(90deg,#3d7fff,#5b9bff)','linear-gradient(90deg,#00c896,#00e6a8)',
+    'linear-gradient(90deg,#ffd060,#ff9500)','linear-gradient(90deg,#a855f7,#c084fc)',
+    'linear-gradient(90deg,#06b6d4,#22d3ee)','linear-gradient(90deg,#ec4899,#f97316)',
+    'linear-gradient(90deg,#10b981,#34d399)','linear-gradient(90deg,#f59e0b,#fbbf24)'
+  ];
+  const dotColors = ['#3d7fff','#00c896','#ffd060','#a855f7','#06b6d4','#ec4899','#10b981','#f59e0b'];
+
+  wrap.innerHTML = `<div class="vkanban-wrap">${
+    cols.map(col => `
+      <div class="kb-col">
+        <div class="kb-col-bar" style="background:${col.ci>=0?barColors[col.ci]:barColors[0]}"></div>
+        <div class="kb-col-hd">
+          <span class="kb-col-dot" style="background:${col.ci>=0?dotColors[col.ci]:'var(--t3)'}"></span>
+          <span class="kb-col-name">${esc(col.name)}</span>
+          <span class="kb-col-cnt">${col.items.length}</span>
+        </div>
+        <div class="kb-items">
+          ${col.items.length ? col.items.map(n => kanbanCardHtml(n, isT)).join('') : `<div style="font-size:11px;color:var(--t3);padding:8px 4px">메모 없음</div>`}
+        </div>
+      </div>`
+    ).join('')
+  }</div>`;
+
+  // 이벤트 바인딩
+  wrap.querySelectorAll('[data-note-id]').forEach(el => {
+    el.addEventListener('click', e => {
+      const id  = el.dataset.noteId;
+      const isT = el.dataset.istrash === '1';
+      const btn = e.target.closest('[data-btn]');
+      if (btn) {
+        const act = btn.dataset.btn;
+        if (act === 'edit')    { openEdit(id);  return; }
+        if (act === 'trash')   { doTrash(id);   return; }
+        if (act === 'restore') { doRestore(id); return; }
+        if (act === 'hardel')  { doHardDel(id); return; }
+      }
+      if (e.target.closest('a')) return;
+      openDet(id, isT);
+    });
+  });
+}
+
+function kanbanCardHtml(n, isT) {
+  const prev = (n.content||'').replace(/\n/g,' ').slice(0,70);
+  return `<div class="kb-card" data-note-id="${n._id}" data-istrash="${isT?'1':'0'}">
+    <div class="kb-title">${esc(n.title||'제목 없음')}</div>
+    ${prev ? `<div class="kb-prev">${esc(prev)}</div>` : ''}
+    <div class="kb-foot">
+      <span style="color:var(--t3)">${fmtShort(n.createdAt)}</span>
+      <div class="kb-acts">${actBtns(n._id, isT)}</div>
+    </div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────
+// LINK THUMBNAIL (microlink.io)
+// ─────────────────────────────────────────
+async function fetchThumb(url) {
+  if (thumbCache.has(url)) return thumbCache.get(url);
+  // localStorage 캐시 확인
+  try {
+    const cached = localStorage.getItem('thumb_' + btoa(url).slice(0,40));
+    if (cached) { const d = JSON.parse(cached); thumbCache.set(url, d); return d; }
+  } catch(_) {}
+  try {
+    const r = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}&palette=false&audio=false&video=false&iframe=false`);
+    const j = await r.json();
+    const d = j.status === 'success' ? {
+      img:   j.data?.image?.url || j.data?.logo?.url || '',
+      title: j.data?.title || '',
+      desc:  j.data?.description || '',
+      url:   j.data?.url || url
+    } : null;
+    thumbCache.set(url, d);
+    if (d) try { localStorage.setItem('thumb_' + btoa(url).slice(0,40), JSON.stringify(d)); } catch(_) {}
+    return d;
+  } catch(_) { thumbCache.set(url, null); return null; }
+}
+
+async function loadThumbnails(list) {
+  for (const n of list) {
+    const link = (n.links||[]).find(l => l?.url);
+    if (!link) continue;
+    const el = document.querySelector(`[data-note-id="${n._id}"] .lprev-slot`);
+    if (!el) continue;
+    const data = await fetchThumb(link.url);
+    if (!data) continue;
+    const fav = favicon(link.url);
+    el.innerHTML = `<a class="lprev" href="${esc(link.url)}" target="_blank" rel="noopener">
+      ${data.img ? `<img class="lprev-img" src="${esc(data.img)}" alt="" onerror="this.parentElement.querySelector('.lprev-img-ph') && (this.style.display='none')">` : `<div class="lprev-img-ph">🔗</div>`}
+      <div class="lprev-info">
+        <div class="lprev-title">${esc(data.title || link.label || domain(link.url))}</div>
+        ${data.desc ? `<div class="lprev-desc">${esc(data.desc)}</div>` : ''}
+        <div class="lprev-url">
+          ${fav ? `<img class="lprev-fav" src="${esc(fav)}" alt="" onerror="this.style.display='none'">` : ''}
+          <span>${esc(domain(link.url))}</span>
+        </div>
+      </div>
+    </a>`;
+  }
+}
+
+function fmtShort(d) {
+  if (!d) return '-';
+  const dt = d instanceof Date ? d : new Date(d);
+  if (isNaN(dt)) return '-';
+  const p = n => String(n).padStart(2,'0');
+  return `${dt.getFullYear()}.${p(dt.getMonth()+1)}.${p(dt.getDate())}`;
+}
+
 function cardHtml(n, isT) {
+  const hasLink = (n.links||[]).some(l => l?.url);
   return `<div class="nc ${barCls(n.category)}" data-note-id="${n._id}" data-istrash="${isT?'1':'0'}">
     <div class="nhead">
       <div class="ntitle">${esc(n.title || '제목 없음')}</div>
       <span class="nbadge ${badgeCls(n.category)}">${esc(catLabel(n.category))}</span>
     </div>
     ${n.content ? `<div class="nbody">${esc(n.content)}</div>` : ''}
+    ${hasLink ? `<div class="lprev-slot"></div>` : ''}
     ${linksHtml(n.links)}
     ${tagsHtml(n.tags)}
     <div class="nfoot">
@@ -525,6 +700,7 @@ function magHtml(n, isT) {
         <span class="nbadge ${badgeCls(n.category)}">${esc(catLabel(n.category))}</span>
       </div>
       ${n.content ? `<div class="nbody">${esc(n.content)}</div>` : ''}
+      ${(n.links||[]).some(l=>l?.url) ? `<div class="lprev-slot"></div>` : ''}
       ${linksHtml(n.links)}
       ${tagsHtml(n.tags)}
       <div class="nfoot">
@@ -831,6 +1007,9 @@ function bindEvents() {
   g('vb-grid').addEventListener('click',     () => setView('grid'));
   g('vb-list').addEventListener('click',     () => setView('list'));
   g('vb-magazine').addEventListener('click', () => setView('magazine'));
+  g('vb-compact').addEventListener('click',  () => setView('compact'));
+  g('vb-timeline').addEventListener('click', () => setView('timeline'));
+  g('vb-kanban').addEventListener('click',   () => setView('kanban'));
 
   // 정렬
   g('sort-sel').addEventListener('change', () => renderNotes());
