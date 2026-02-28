@@ -17,13 +17,13 @@ import {
 // Firebase 설정 (본인 프로젝트 값)
 // ══════════════════════════════════════════════════════
 const firebaseConfig = {
-  apiKey: "AIzaSyComDARleCbTfzB9LTdS211DSSHp1PXIPk",
-  authDomain: "notepad-e6a66.firebaseapp.com",
-  projectId: "notepad-e6a66",
-  storageBucket: "notepad-e6a66.firebasestorage.app",
+  apiKey:            "AIzaSyComDAR1eCbTfzB9LTdS211DSSHp1PXIPk",
+  authDomain:        "notepad-e6a66.firebaseapp.com",
+  projectId:         "notepad-e6a66",
+  storageBucket:     "notepad-e6a66.firebasestorage.app",
   messagingSenderId: "739275664534",
-  appId: "1:739275664534:web:8368fdffb5d8f3d67da6b7",
-  measurementId: "G-GN1FNHRGBE"
+  appId:             "1:739275664534:web:8368fdffb5d8f3d67da6b7",
+  measurementId:     "G-GN1FNHRGBE"
 };
 
 const app      = initializeApp(firebaseConfig);
@@ -148,13 +148,21 @@ async function addCat() {
     toast(`'${name}' 카테고리가 이미 존재합니다.`, 'wrn');
     return;
   }
+  const btn = g('add-cat-btn');
+  btn.textContent = '...'; btn.disabled = true;
   try {
     const ref = await addDoc(colCats(), { name });
     cats.push({ _id: ref.id, name });
     inp.value = '';
     renderAll();
     toast(`'${name}' 카테고리 추가됨 ✅`);
-  } catch (err) { toast('추가 실패: ' + err.message, 'err'); }
+  } catch (err) {
+    console.error('addCat error:', err);
+    toast('추가 실패: ' + err.message, 'err');
+    alert('카테고리 추가 실패\n\n' + err.code + ': ' + err.message + '\n\nFirebase 보안 규칙을 확인하세요.');
+  } finally {
+    btn.textContent = '추가'; btn.disabled = false;
+  }
 }
 
 async function deleteCat(id) {
@@ -422,15 +430,16 @@ function renderNotes() {
   wrap.querySelectorAll('[data-note-id]').forEach(el => {
     el.addEventListener('click', (e) => {
       const id  = el.dataset.noteId;
-      const isT = el.dataset.trash === '1';
-      // 수정 버튼
-      if (e.target.closest('[data-edit]')) { openEdit(id); return; }
-      // 삭제(휴지통으로) 버튼
-      if (e.target.closest('[data-trash]')) { doTrash(id, isT); return; }
-      // 복원 버튼
-      if (e.target.closest('[data-restore]')) { doRestore(id); return; }
-      // 완전삭제 버튼
-      if (e.target.closest('[data-hardel]')) { doHardDel(id); return; }
+      const isT = el.dataset.istrash === '1';
+      // 액션 버튼 (data-btn 속성으로 구분)
+      const btn = e.target.closest('[data-btn]');
+      if (btn) {
+        const act = btn.dataset.btn;
+        if (act === 'edit')    { openEdit(id);  return; }
+        if (act === 'trash')   { doTrash(id);   return; }
+        if (act === 'restore') { doRestore(id); return; }
+        if (act === 'hardel')  { doHardDel(id); return; }
+      }
       // 링크 클릭은 상세 열지 않음
       if (e.target.closest('a')) return;
       // 상세보기
@@ -459,15 +468,15 @@ function tagsHtml(tags) {
 
 function actBtns(id, isT) {
   if (isT) return `
-    <button class="na grn" data-restore>복원</button>
-    <button class="na del" data-hardel>완전삭제</button>`;
+    <button class="na grn" data-btn="restore">복원</button>
+    <button class="na del" data-btn="hardel">완전삭제</button>`;
   return `
-    <button class="na"     data-edit>수정</button>
-    <button class="na del" data-trash>삭제</button>`;
+    <button class="na"     data-btn="edit">수정</button>
+    <button class="na del" data-btn="trash">삭제</button>`;
 }
 
 function cardHtml(n, isT) {
-  return `<div class="nc ${barCls(n.category)}" data-note-id="${n._id}" data-trash="${isT?'1':'0'}">
+  return `<div class="nc ${barCls(n.category)}" data-note-id="${n._id}" data-istrash="${isT?'1':'0'}">
     <div class="nhead">
       <div class="ntitle">${esc(n.title || '제목 없음')}</div>
       <span class="nbadge ${badgeCls(n.category)}">${esc(catLabel(n.category))}</span>
@@ -488,7 +497,7 @@ function cardHtml(n, isT) {
 
 function listHtml(n, isT) {
   const prev = (n.content || '').replace(/\n/g, ' ').slice(0, 90);
-  return `<div class="nl ${barCls(n.category)}" data-note-id="${n._id}" data-trash="${isT?'1':'0'}">
+  return `<div class="nl ${barCls(n.category)}" data-note-id="${n._id}" data-istrash="${isT?'1':'0'}">
     <span class="nldot ${dotCls(n.category)}"></span>
     <div class="nlmain">
       <div class="nltitle">${esc(n.title || '제목 없음')}</div>
@@ -506,7 +515,7 @@ function listHtml(n, isT) {
 function magHtml(n, isT) {
   const ci    = catColorIdx(n.category);
   const emoji = ci >= 0 ? MAG_EMOJI[ci] : '📝';
-  return `<div class="nm ${barCls(n.category)}" data-note-id="${n._id}" data-trash="${isT?'1':'0'}">
+  return `<div class="nm ${barCls(n.category)}" data-note-id="${n._id}" data-istrash="${isT?'1':'0'}">
     <div class="nmhd ${magCls(n.category)}">${emoji}
       <div class="nmbar"${ci>=0?' style="background:linear-gradient(90deg,var(--acc),transparent)"':''}></div>
     </div>
@@ -529,8 +538,7 @@ function magHtml(n, isT) {
 // ══════════════════════════════════════════════════════
 // 액션
 // ══════════════════════════════════════════════════════
-async function doTrash(id, isT) {
-  if (isT) return; // 이미 휴지통이면 무시
+async function doTrash(id) {
   const n = notes.find(x => x._id === id);
   if (!confirm(`"${n?.title || '이 메모'}"를 휴지통으로 이동할까요?`)) return;
   try { await moveToTrash(id); closeDet(); renderAll(); toast('휴지통으로 이동했습니다.'); }
