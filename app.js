@@ -617,6 +617,23 @@ async function fetchThumb(url) {
   } catch(_) { thumbCache.set(url, null); return null; }
 }
 
+function thumbCardHtml(l, data) {
+  const fav = favicon(l.url);
+  return `<a class="lprev det-thumb" href="${esc(l.url)}" target="_blank" rel="noopener" style="max-width:100%">
+    ${data.img
+      ? `<img class="lprev-img" src="${esc(data.img)}" alt="" style="height:160px" onerror="this.style.display='none'">`
+      : `<div class="lprev-img-ph">🔗</div>`}
+    <div class="lprev-info">
+      <div class="lprev-title">${esc(data.title || l.label || domain(l.url))}</div>
+      ${data.desc ? `<div class="lprev-desc">${esc(data.desc)}</div>` : ''}
+      <div class="lprev-url">
+        ${fav ? `<img class="lprev-fav" src="${esc(fav)}" alt="" onerror="this.style.display='none'">` : ''}
+        <span>${esc(domain(l.url))}</span>
+      </div>
+    </div>
+  </a>`;
+}
+
 async function loadThumbnails(list) {
   for (const n of list) {
     const link = (n.links||[]).find(l => l?.url);
@@ -894,27 +911,53 @@ function openDet(id, isT) {
 
   g('det-title').textContent = n.title || '제목 없음';
 
-  const linkCards = (n.links || []).filter(l => l?.url).map(l => {
+  const links = (n.links || []).filter(l => l?.url);
+
+  // 링크: 우선 칩(chip) 형태로 빠르게 렌더 후 썸네일 비동기 교체
+  const linkSlotsHtml = links.map((l, i) => {
     const fav = favicon(l.url);
-    return `<a class="detlink" href="${esc(l.url)}" target="_blank" rel="noopener">
-      ${fav ? `<img src="${esc(fav)}" alt="" onerror="this.style.display='none'">` : '🔗'}
-      <div class="detlinfo">
-        <div class="detlname">${esc(l.label || domain(l.url))}</div>
-        <div class="detlurl">${esc(domain(l.url))}</div>
-      </div>
-    </a>`;
+    const cached = thumbCache.get(l.url);
+    if (cached) {
+      return thumbCardHtml(l, cached);
+    }
+    // 로딩 플레이스홀더
+    return `<div class="det-lprev-slot" data-li="${i}" data-url="${esc(l.url)}">
+      <a class="detlink" href="${esc(l.url)}" target="_blank" rel="noopener">
+        ${fav ? `<img src="${esc(fav)}" alt="" onerror="this.style.display='none'">` : '<span>🔗</span>'}
+        <div class="detlinfo">
+          <div class="detlname">${esc(l.label || domain(l.url))}</div>
+          <div class="detlurl">${esc(domain(l.url))}</div>
+        </div>
+      </a>
+    </div>`;
   }).join('');
 
   g('det-body').innerHTML = `
     <span class="nbadge ${badgeCls(n.category)}" style="width:fit-content">${esc(catLabel(n.category))}</span>
     ${n.content ? `<div class="detcontent">${esc(n.content)}</div>` : ''}
-    ${linkCards ? `<div class="detlinks">${linkCards}</div>` : ''}
+    ${links.length ? `<div class="detlinks" style="flex-direction:column">${linkSlotsHtml}</div>` : ''}
     ${tagsHtml(n.tags)}
     <div class="detmeta">
       <span>📅 작성: ${fmt(n.createdAt)}</span>
       <span>✏️ 수정: ${fmt(n.updatedAt)}</span>
       ${isT && n.deletedAt ? `<span style="color:var(--red)">🗑 삭제: ${fmt(n.deletedAt)}</span>` : ''}
     </div>`;
+
+  // 썸네일 비동기 로드 (캐시 없는 것만)
+  links.forEach((l, i) => {
+    if (thumbCache.has(l.url)) return;
+    fetchThumb(l.url).then(data => {
+      const slot = document.querySelector(`.det-lprev-slot[data-li="${i}"]`);
+      if (!slot) return;
+      slot.outerHTML = data ? thumbCardHtml(l, data) : `<a class="detlink" href="${esc(l.url)}" target="_blank" rel="noopener">
+        <span>🔗</span>
+        <div class="detlinfo">
+          <div class="detlname">${esc(l.label || domain(l.url))}</div>
+          <div class="detlurl">${esc(domain(l.url))}</div>
+        </div>
+      </a>`;
+    });
+  });
 
   const foot = g('det-foot');
   foot.innerHTML = '';
