@@ -48,6 +48,7 @@ let eTags  = [];        // 편집 중 태그 목록
 let eLinks = [];        // 편집 중 링크 목록 [{label, url}]
 
 let sbCollapsed = false; // 사이드바 접힘 상태
+const thumbCache = new Map();  // 링크 썸네일 캐시
 
 // ══════════════════════════════════════════════════════
 // Firestore 경로 헬퍼
@@ -423,11 +424,28 @@ function renderNotes() {
     return;
   }
 
-  const htmlFn = view === 'grid' ? cardHtml : view === 'list' ? listHtml : magHtml;
-  wrap.innerHTML = list.map(n => htmlFn(n, isT)).join('');
+  // 뷰별 렌더링
+  if (view === 'kanban') {
+    renderKanban(wrap, list, isT);
+    return;
+  }
+  if (view === 'timeline') {
+    wrap.innerHTML = timelineHtml(list, isT);
+  } else {
+    const htmlFn = view === 'grid' ? cardHtml
+                 : view === 'list' ? listHtml
+                 : view === 'magazine' ? magHtml
+                 : view === 'compact' ? compactHtml
+                 : cardHtml;
+    wrap.innerHTML = list.map(n => htmlFn(n, isT)).join('');
+  }
 
-  // 메모 클릭 이벤트 위임 (kanban은 자체 처리)
-  if (view === 'kanban') return;
+  // 링크 썸네일 비동기 로드 (카드/매거진/타임라인)
+  if (['grid', 'magazine', 'timeline'].includes(view)) {
+    setTimeout(() => loadThumbnails(list), 100);
+  }
+
+  // 메모 클릭 이벤트 위임
   wrap.querySelectorAll('[data-note-id]').forEach(el => {
     el.addEventListener('click', (e) => {
       const id  = el.dataset.noteId;
@@ -441,10 +459,8 @@ function renderNotes() {
         if (act === 'restore') { doRestore(id); return; }
         if (act === 'hardel')  { doHardDel(id); return; }
       }
-      // 링크 클릭은 상세 열지 않음
-      if (e.target.closest('a')) return;
-      // 상세보기
-      openDet(id, isT);
+      // 상세보기 (링크칩/썸네일 클릭 제외)
+      if (!e.target.closest('a')) openDet(id, isT);
     });
   });
 }
@@ -782,9 +798,10 @@ function closeMobileSb() {
 // ══════════════════════════════════════════════════════
 function setView(mode) {
   view = mode;
-  ['grid', 'list', 'magazine'].forEach(m =>
-    g(`vb-${m}`).classList.toggle('on', m === mode)
-  );
+  ['grid', 'list', 'magazine', 'compact', 'timeline', 'kanban'].forEach(m => {
+    const btn = g(`vb-${m}`);
+    if (btn) btn.classList.toggle('on', m === mode);
+  });
   renderNotes();
 }
 
