@@ -483,10 +483,9 @@ input[type="datetime-local"].fc{color-scheme:dark;}
 .modal-edit{max-width:720px;}
 /* 상세보기 모달은 기존 스크롤 방식 유지 */
 #det-ov .modal{height:auto;max-height:92vh;overflow-y:auto;display:block;}
-/* Quill 에디터 고정 높이 (무한 확장 방지) */
-.modal-edit .ql-container{height:220px;overflow-y:auto;min-height:unset;}
-.modal-edit .ql-editor{min-height:200px;height:auto;}
-/* fg 내 Quill 래퍼 */
+/* Quill 에디터: 내용만큼 늘어남, 스크롤은 mbody에서 통합 처리 */
+.modal-edit .ql-container{height:auto;overflow-y:visible;min-height:unset;}
+.modal-edit .ql-editor{min-height:220px;height:auto;max-height:none;}
 .modal-edit #e-content-quill{flex-shrink:0;}
 /* 모바일 모달 */
 @media(max-width:520px){
@@ -502,6 +501,7 @@ input[type="datetime-local"].fc{color-scheme:dark;}
   background:var(--bg3);border:1px solid var(--bd);border-top:none;
   border-radius:0 0 9px 9px;transition:background .15s;flex-shrink:0;
   user-select:none;-webkit-user-select:none;
+  display:none;
 }
 .quill-resize-handle:hover,.quill-resize-handle.dragging{background:rgba(61,127,255,.18);border-color:var(--acc);}
 .quill-resize-handle::before{

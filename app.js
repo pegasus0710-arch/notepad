@@ -1180,35 +1180,25 @@ function initQuill() {
     renderTagPre();
   });
 
-  // ── 스크롤 점프 방지
-  // 방법A: 툴바 버튼 mousedown 시 포커스 이탈 차단
+  // ── 스크롤 점프 방지 (근본 해결)
+  // 1. Quill 내부 scrollIntoView 비활성화 → 툴바 클릭 후 자동 스크롤 차단
+  quillInst.scrollIntoView = function() { /* 비활성화 */ };
+
+  // 2. 툴바 mousedown 시 mbody 스크롤 위치 보존
   const toolbar = quillInst.getModule('toolbar');
   if (toolbar && toolbar.container) {
     toolbar.container.addEventListener('mousedown', e => {
-      // 버튼/선택기 클릭 시 에디터 포커스 유지
-      const target = e.target.closest('button, .ql-picker, .ql-picker-label, .ql-picker-item');
-      if (target) e.preventDefault();
+      // 클릭 직전 mbody 스크롤 저장
+      const mbody = document.querySelector('#edit-ov .mbody');
+      const savedTop = mbody ? mbody.scrollTop : 0;
+      // mousedown 기본동작 차단 → 에디터 포커스 유지
+      e.preventDefault();
+      // 다음 프레임에 스크롤 복원 (Quill 처리 후)
+      requestAnimationFrame(() => {
+        if (mbody) mbody.scrollTop = savedTop;
+      });
     });
   }
-
-  // 방법B: 서식 적용 전후 ql-container 스크롤 위치 저장/복원
-  const qlContainer = document.querySelector('.ql-container');
-  let _savedScrollTop = 0;
-  quillInst.on('selection-change', (range, oldRange) => {
-    if (range) {
-      // 선택 변경 시 현재 스크롤 저장
-      _savedScrollTop = qlContainer ? qlContainer.scrollTop : 0;
-    }
-  });
-  // text-change(서식 적용) 직후 스크롤 복원
-  quillInst.on('text-change', (delta, oldDelta, source) => {
-    if (source === 'user' && qlContainer) {
-      // 다음 tick에 복원 (Quill 내부 처리 완료 후)
-      requestAnimationFrame(() => {
-        qlContainer.scrollTop = _savedScrollTop;
-      });
-    }
-  });
 }
 
 function setQuillContent(html) {
