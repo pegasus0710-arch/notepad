@@ -1569,6 +1569,68 @@ function bindEvents() {
   // ── 대시보드 뷰 버튼
   const vbDash = g('vb-dash');
   if (vbDash) vbDash.addEventListener('click', () => setView('dash'));
+
+  // ── Quill 에디터 높이 드래그 리사이즈
+  initQuillResize();
+}
+
+function initQuillResize() {
+  const handle   = g('quill-resize-handle');
+  const wrap     = g('quill-wrap');
+  if (!handle || !wrap) return;
+
+  let startY   = 0;
+  let startH   = 0;
+  const MIN_H  = 100;
+  const MAX_H  = 600;
+  const PREF_KEY = 'quill_editor_height';
+
+  // 저장된 높이 복원
+  const saved = localStorage.getItem(PREF_KEY);
+  if (saved) applyHeight(parseInt(saved));
+
+  function applyHeight(h) {
+    const clamped = Math.min(MAX_H, Math.max(MIN_H, h));
+    const container = wrap.querySelector('.ql-container');
+    if (container) container.style.height = clamped + 'px';
+    wrap.dataset.h = clamped;
+  }
+
+  function onMove(e) {
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const diff    = clientY - startY;
+    applyHeight(startH + diff);
+  }
+
+  function onEnd() {
+    handle.classList.remove('dragging');
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup',   onEnd);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend',  onEnd);
+    // 높이 저장
+    if (wrap.dataset.h) localStorage.setItem(PREF_KEY, wrap.dataset.h);
+  }
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    startY = e.clientY;
+    const container = wrap.querySelector('.ql-container');
+    startH = container ? container.offsetHeight : 220;
+    handle.classList.add('dragging');
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup',   onEnd);
+  });
+
+  // 터치 지원
+  handle.addEventListener('touchstart', e => {
+    startY = e.touches[0].clientY;
+    const container = wrap.querySelector('.ql-container');
+    startH = container ? container.offsetHeight : 220;
+    handle.classList.add('dragging');
+    document.addEventListener('touchmove', onMove, { passive: true });
+    document.addEventListener('touchend',  onEnd);
+  }, { passive: true });
 }
 
 // ══════════════════════════════════════════════════════
