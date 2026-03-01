@@ -1180,25 +1180,32 @@ function initQuill() {
     renderTagPre();
   });
 
-  // ── 스크롤 점프 방지 (근본 해결)
-  // 1. Quill 내부 scrollIntoView 비활성화 → 툴바 클릭 후 자동 스크롤 차단
-  quillInst.scrollIntoView = function() { /* 비활성화 */ };
+  // ── Quill wheel 이벤트 → 모달 스크롤로 전달
+  // Quill editor가 wheel 이벤트를 가로채는 것을 방지
+  const qlRoot = quillInst.root; // .ql-editor
+  qlRoot.addEventListener('wheel', (e) => {
+    const modal = document.querySelector('#edit-ov .modal');
+    if (modal) {
+      modal.scrollTop += e.deltaY;
+      e.preventDefault();
+    }
+  }, { passive: false });
 
-  // 2. 툴바 mousedown 시 mbody 스크롤 위치 보존
+  // ── 툴바 mousedown 시 모달 스크롤 위치 보존
   const toolbar = quillInst.getModule('toolbar');
   if (toolbar && toolbar.container) {
     toolbar.container.addEventListener('mousedown', e => {
-      // 클릭 직전 mbody 스크롤 저장
-      const mbody = document.querySelector('#edit-ov .mbody');
-      const savedTop = mbody ? mbody.scrollTop : 0;
-      // mousedown 기본동작 차단 → 에디터 포커스 유지
-      e.preventDefault();
-      // 다음 프레임에 스크롤 복원 (Quill 처리 후)
+      const modal = document.querySelector('#edit-ov .modal');
+      const savedTop = modal ? modal.scrollTop : 0;
+      e.preventDefault(); // 포커스 이탈 차단
       requestAnimationFrame(() => {
-        if (mbody) mbody.scrollTop = savedTop;
+        if (modal) modal.scrollTop = savedTop;
       });
     });
   }
+
+  // scrollIntoView 비활성화
+  quillInst.scrollIntoView = function() {};
 }
 
 function setQuillContent(html) {

@@ -283,14 +283,14 @@ a{text-decoration:none;}
 /* ── MODAL ── */
 .ov{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.72);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .22s;}
 .ov.on{opacity:1;pointer-events:all;}
-.modal{background:var(--card2);border:1px solid var(--bd2);border-radius:18px;width:100%;max-width:640px;height:92vh;max-height:92vh;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.72);transform:translateY(18px) scale(.97);transition:transform .22s;display:flex;flex-direction:column;}
+.modal{background:var(--card2);border:1px solid var(--bd2);border-radius:18px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;overflow-x:hidden;box-shadow:0 24px 64px rgba(0,0,0,.72);transform:translateY(18px) scale(.97);transition:transform .22s;-webkit-overflow-scrolling:touch;scroll-behavior:smooth;}
 .ov.on .modal{transform:none;}
-.mhd{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--bd);flex-shrink:0;}
+.mhd{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:10;background:var(--card2);border-radius:18px 18px 0 0;}
 .mtitle{font-size:15px;font-weight:700;}
 .mx{width:28px;height:28px;border-radius:7px;background:transparent;border:none;color:var(--t3);font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.18s;}
 .mx:hover{background:var(--bg3);color:var(--t);}
-.mbody{padding:14px 20px;display:flex;flex-direction:column;gap:12px;flex:1;overflow-y:auto;min-height:0;overscroll-behavior:contain;}
-.mfoot{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--bd);flex-shrink:0;background:var(--card2);border-radius:0 0 18px 18px;}
+.mbody{padding:14px 20px;display:flex;flex-direction:column;gap:12px;}
+.mfoot{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--bd);position:sticky;bottom:0;z-index:10;background:var(--card2);border-radius:0 0 18px 18px;}
 .fg{display:flex;flex-direction:column;gap:5px;flex-shrink:0;}
 .fl{font-size:11px;font-weight:600;color:var(--t3);letter-spacing:.3px;}
 .fc{padding:8px 12px;background:var(--bg3);border:1px solid var(--bd);border-radius:9px;color:var(--t);font-size:13px;outline:none;transition:.2s;width:100%;}
@@ -481,15 +481,12 @@ input[type="datetime-local"].fc{color-scheme:dark;}
 
 /* ── 편집 모달 전용 (더 넓게) */
 .modal-edit{max-width:720px;}
-/* 상세보기 모달은 기존 스크롤 방식 유지 */
-#det-ov .modal{height:auto;max-height:92vh;overflow-y:auto;display:block;}
-/* Quill 에디터: 내용만큼 늘어남, 스크롤은 mbody에서 통합 처리 */
-.modal-edit .ql-container{height:auto;overflow-y:visible;min-height:unset;}
-.modal-edit .ql-editor{min-height:220px;height:auto;max-height:none;}
-.modal-edit #e-content-quill{flex-shrink:0;}
-/* 모바일 모달 */
+/* Quill: 내용만큼 늘어남 */
+.modal-edit .ql-container{height:auto !important;overflow:visible !important;min-height:unset !important;}
+.modal-edit .ql-editor{min-height:200px;height:auto !important;max-height:none !important;overflow:visible !important;}
+/* 모바일 */
 @media(max-width:520px){
-  .modal,.modal-edit{height:100vh;max-height:100vh;border-radius:0;}
+  .modal,.modal-edit{max-height:100vh;border-radius:0;}
   .ov{padding:0;}
 }
 
