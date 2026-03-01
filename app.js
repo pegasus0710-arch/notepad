@@ -41,7 +41,12 @@ let cats      = [];     // 카테고리 [{_id, name}]
 let trashDays = 30;
 
 let nav   = 'all';      // 'all' | 'trash' | 'cat:{id}'
-let view  = 'grid';     // 'grid' | 'list' | 'magazine'
+let view  = 'grid';     // 'grid'|'list'|'magazine'|'compact'|'timeline'|'kanban'|'dash'
+
+// ── 필터 상태
+let filterLink  = false;   // 링크있음 필터
+let filterPeriod = '';     // 'week'|'month'|''
+let filterTag   = '';      // 태그 필터 문자열
 
 let editId = null;      // 수정 중인 메모 ID (null = 신규)
 let eTags  = [];        // 편집 중 태그 목록
@@ -332,6 +337,14 @@ function getFiltered() {
       catLabel(n.category).toLowerCase().includes(q)
     );
   }
+  // 추가 필터
+  if (filterLink) list = list.filter(n => (n.links||[]).some(l=>l?.url));
+  if (filterTag)  list = list.filter(n => (n.tags||[]).includes(filterTag));
+  if (filterPeriod) {
+    const now  = Date.now();
+    const cutoff = filterPeriod === 'week' ? now - 7*864e5 : now - 30*864e5;
+    list = list.filter(n => n.createdAt && new Date(n.createdAt).getTime() >= cutoff);
+  }
   const key = (sort === 'cd' || sort === 'ca') ? 'createdAt' : 'updatedAt';
   const asc = (sort === 'ca' || sort === 'ma');
   list.sort((a, b) => {
@@ -346,6 +359,7 @@ function getFiltered() {
 // ══════════════════════════════════════════════════════
 function renderAll() {
   renderSidebar();
+  renderChipBar();
   renderNotes();
   renderStats();
   fillCatSelect();
@@ -424,13 +438,299 @@ function fillCatSelect() {
   if (prev) sel.value = prev;
 }
 
+
+// ══════════════════════════════════════════════════════
+// 필터 칩 바 렌더
+// ══════════════════════════════════════════════════════
+function renderChipBar() {
+  const isT = nav === 'trash';
+  const chipBar = g('chip-bar');
+  if (!chipBar) return;
+
+  // 휴지통이면 칩바 숨김
+  chipBar.style.display = isT ? 'none' : '';
+
+  // ── 카테고리 칩
+  const scroll = g('chip-scroll');
+  if (scroll) {
+    const dotColors = ['#3d7fff','#00c896','#ffd060','#a855f7','#06b6d4','#ec4899','#10b981','#f59e0b'];
+    const bgColors  = [
+      'rgba(61,127,255,.1)','rgba(0,200,150,.1)','rgba(255,208,96,.1)',
+      'rgba(168,85,247,.1)','rgba(6,182,212,.1)','rgba(236,72,153,.1)',
+      'rgba(16,185,129,.1)','rgba(245,158,11,.1)'
+    ];
+    scroll.innerHTML = `<button class="chip-cat${nav==='all'?' on':''}" data-nav="all">
+        <span class="cc-dot" style="background:var(--acc)"></span>
+        전체 <span class="cc-cnt">${notes.length}</span>
+      </button>` +
+      cats.map((c,i) => {
+        const ci = i % 8;
+        const cnt = notes.filter(n=>n.category===c._id).length;
+        const on  = nav === `cat:${c._id}`;
+        return `<button class="chip-cat${on?' on':''}" data-nav="cat:${esc(c._id)}"
+          style="${on?'':''}">
+          <span class="cc-dot" style="background:${dotColors[ci]}"></span>
+          ${esc(c.name)} <span class="cc-cnt">${cnt}</span>
+        </button>`;
+      }).join('');
+
+    // 카테고리 칩 클릭
+    scroll.querySelectorAll('.chip-cat').forEach(btn => {
+      btn.addEventListener('click', () => {
+        goNav(btn.dataset.nav);
+      });
+    });
+  }
+
+  // ── 태그 칩 (현재 목록에서 많이 쓰인 상위 10개)
+  const tagWrap = g('tag-chip-wrap');
+  if (tagWrap) {
+    const tagCount = {};
+    notes.forEach(n => (n.tags||[]).forEach(t => { tagCount[t]=(tagCount[t]||0)+1; }));
+    const topTags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    tagWrap.innerHTML = topTags.map(([t,cnt]) =>
+      `<button class="tchip${filterTag===t?' on':''}" data-tag="${esc(t)}">#${esc(t)}<span style="font-size:9px;margin-left:2px;opacity:.6">${cnt}</span></button>`
+    ).join('');
+    tagWrap.querySelectorAll('.tchip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterTag = filterTag === btn.dataset.tag ? '' : btn.dataset.tag;
+        updateFilterUI();
+        renderNotes(); renderStats();
+      });
+    });
+  }
+
+  // ── 필터 버튼 상태 동기화
+  updateFilterUI();
+}
+
+function updateFilterUI() {
+  const fcLink  = g('fc-link');
+  const fcWeek  = g('fc-week');
+  const fcMonth = g('fc-month');
+  const clearBtn = g('chip-clear');
+  if (fcLink)  fcLink.classList.toggle('on', filterLink);
+  if (fcWeek)  fcWeek.classList.toggle('on', filterPeriod==='week');
+  if (fcMonth) fcMonth.classList.toggle('on', filterPeriod==='month');
+  const anyFilter = filterLink || filterPeriod || filterTag;
+  if (clearBtn) clearBtn.classList.toggle('hidden', !anyFilter);
+  // 태그 칩 on 상태 동기화
+  document.querySelectorAll('.tchip').forEach(b => b.classList.toggle('on', b.dataset.tag === filterTag));
+}
+
+function clearFilters() {
+  filterLink = false; filterPeriod = ''; filterTag = '';
+  updateFilterUI();
+  renderNotes(); renderStats();
+}
+
+// ══════════════════════════════════════════════════════
+// 대시보드 렌더
+// ══════════════════════════════════════════════════════
+function renderDash(wrap) {
+  wrap.className = 'vdash';
+  const total = notes.length;
+  const dotColors = ['#3d7fff','#00c896','#ffd060','#a855f7','#06b6d4','#ec4899','#10b981','#f59e0b'];
+  const bgColors  = [
+    'rgba(61,127,255,.08)','rgba(0,200,150,.08)','rgba(255,208,96,.08)',
+    'rgba(168,85,247,.08)','rgba(6,182,212,.08)','rgba(236,72,153,.08)',
+    'rgba(16,185,129,.08)','rgba(245,158,11,.08)'
+  ];
+  const barColors = [
+    'linear-gradient(90deg,#3d7fff,#5b9bff)','linear-gradient(90deg,#00c896,#00e6a8)',
+    'linear-gradient(90deg,#ffd060,#ff9500)','linear-gradient(90deg,#a855f7,#c084fc)',
+    'linear-gradient(90deg,#06b6d4,#22d3ee)','linear-gradient(90deg,#ec4899,#f97316)',
+    'linear-gradient(90deg,#10b981,#34d399)','linear-gradient(90deg,#f59e0b,#fbbf24)'
+  ];
+
+  // ── 카테고리 카드
+  const catItems = cats.map((c,i) => {
+    const ci  = i%8;
+    const cnt = notes.filter(n=>n.category===c._id).length;
+    const recent = notes.filter(n=>n.category===c._id)
+      .sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0))[0];
+    return {c, ci, cnt, recent};
+  });
+  const uncatCnt = notes.filter(n=>!n.category||!cats.find(c=>c._id===n.category)).length;
+
+  const catCardsHtml = catItems.map(({c,ci,cnt,recent}) => `
+    <div class="dash-cat" data-nav="cat:${esc(c._id)}"
+      style="background:${bgColors[ci]}">
+      <div class="dash-cat-bar" style="background:${dotColors[ci]}"></div>
+      <div class="dash-cat-name">${esc(c.name)}</div>
+      <div class="dash-cat-cnt" style="color:${dotColors[ci]}">${cnt}</div>
+      <div class="dash-cat-recent">${recent ? esc(recent.title||'제목없음') : '메모 없음'}</div>
+    </div>`).join('') +
+    (uncatCnt > 0 ? `<div class="dash-cat" data-nav="all" style="background:rgba(90,110,154,.08)">
+      <div class="dash-cat-bar" style="background:var(--t3)"></div>
+      <div class="dash-cat-name">카테고리없음</div>
+      <div class="dash-cat-cnt" style="color:var(--t3)">${uncatCnt}</div>
+      <div class="dash-cat-recent">미분류 메모</div>
+    </div>` : '');
+
+  // ── 카테고리 비율 바
+  const ratioRows = catItems.map(({c,ci,cnt}) => {
+    const pct = total ? Math.round(cnt/total*100) : 0;
+    return `<div class="dash-stats-row">
+      <span class="dash-stats-lbl">${esc(c.name)}</span>
+      <div class="dash-stats-bar-wrap">
+        <div class="dash-stats-bar" style="width:${pct}%;background:${barColors[ci]}"></div>
+      </div>
+      <span class="dash-stats-cnt">${cnt}</span>
+    </div>`;
+  }).join('');
+
+  // ── 최근 10개 활동
+  const recent10 = [...notes].sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0)).slice(0,10);
+  const actHtml = recent10.map(n => {
+    const ci = catColorIdx(n.category);
+    const col = ci>=0 ? dotColors[ci] : 'var(--t3)';
+    return `<div class="dash-act-row" data-note-id="${n._id}">
+      <span class="dash-act-dot" style="background:${col}"></span>
+      <span class="dash-act-title">${esc(n.title||'제목없음')}</span>
+      <span class="dash-act-meta">
+        <span>${ci>=0?esc(catLabel(n.category)):''}</span>
+        <span>${fmtShort(n.updatedAt||n.createdAt)}</span>
+      </span>
+    </div>`;
+  }).join('');
+
+  // ── 태그 클라우드
+  const tagCount = {};
+  notes.forEach(n=>(n.tags||[]).forEach(t=>{tagCount[t]=(tagCount[t]||0)+1;}));
+  const sortedTags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,30);
+  const maxCnt = sortedTags[0]?.[1]||1;
+  const tagCloudHtml = sortedTags.map(([t,cnt]) => {
+    const size = 10 + Math.round((cnt/maxCnt)*6);
+    return `<span class="dash-tag" data-tag="${esc(t)}" style="font-size:${size}px">#${esc(t)}<span class="dt-cnt">${cnt}</span></span>`;
+  }).join('');
+
+  // ── 최근 30일 히트맵
+  const heatCells = [];
+  const today = new Date(); today.setHours(23,59,59,999);
+  const heatLabels = [];
+  for (let i=27;i>=0;i--) {
+    const d = new Date(today); d.setDate(d.getDate()-i);
+    const dayStr = fmtShort(d);
+    const cnt = notes.filter(n=>fmtShort(n.createdAt)===dayStr).length;
+    const lv = cnt===0?'':cnt===1?'lv1':cnt<=3?'lv2':cnt<=6?'lv3':'lv4';
+    heatCells.push(`<div class="dash-hm-cell${lv?' '+lv:''}" title="${dayStr}: ${cnt}개"></div>`);
+    if (i%7===0||i===0) heatLabels.push(`<span>${d.getMonth()+1}/${d.getDate()}</span>`);
+  }
+  // 오늘 요일에 맞게 앞에 빈칸 추가
+  const todayDow = today.getDay(); // 0=일
+  const padStart = (todayDow+1)%7; // 월요일 시작 기준
+  const padCells = Array(Math.max(0,28-heatCells.length)).fill('<div class="dash-hm-cell"></div>');
+
+  // ── 링크 있는 메모 수
+  const linkNotes = notes.filter(n=>(n.links||[]).some(l=>l?.url));
+
+  wrap.innerHTML = `
+    <!-- 요약 통계 -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px">
+      ${[
+        {label:'전체 메모', val:total, icon:'📝', col:'var(--acc)'},
+        {label:'카테고리', val:cats.length, icon:'🗂️', col:'var(--green)'},
+        {label:'링크 메모', val:linkNotes.length, icon:'🔗', col:'var(--yellow)'},
+        {label:'휴지통', val:trashed.length, icon:'🗑️', col:'var(--red)'},
+      ].map(s=>`<div style="background:var(--card);border:1px solid var(--bd);border-radius:var(--r);padding:14px;text-align:center">
+        <div style="font-size:22px;margin-bottom:6px">${s.icon}</div>
+        <div style="font-size:22px;font-weight:900;color:${s.col};line-height:1">${s.val}</div>
+        <div style="font-size:10px;color:var(--t3);margin-top:4px">${s.label}</div>
+      </div>`).join('')}
+    </div>
+
+    <!-- 카테고리 카드 -->
+    ${cats.length ? `<div class="dash-section">
+      <div class="dash-shd">🗂️ 카테고리별 메모
+        <span class="dash-shd-sub">클릭하면 해당 카테고리로 이동</span>
+      </div>
+      <div class="dash-body">
+        <div class="dash-cats">${catCardsHtml}</div>
+      </div>
+    </div>` : ''}
+
+    <!-- 비율 바 + 최근 활동 (2열) -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      ${cats.length ? `<div class="dash-section">
+        <div class="dash-shd">📊 카테고리 비율</div>
+        <div class="dash-body">${ratioRows||'<span style="color:var(--t3);font-size:12px">카테고리 없음</span>'}</div>
+      </div>` : ''}
+      <div class="dash-section" ${cats.length?'':'style="grid-column:1/-1"'}>
+        <div class="dash-shd">⚡ 최근 활동
+          <span class="dash-shd-sub">최근 수정순 10개</span>
+        </div>
+        <div class="dash-body">
+          <div class="dash-activity">${actHtml||'<span style="color:var(--t3);font-size:12px">메모 없음</span>'}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 활동 히트맵 -->
+    <div class="dash-section">
+      <div class="dash-shd">📅 최근 28일 작성 현황</div>
+      <div class="dash-body">
+        <div class="dash-hm-label">
+          <span style="display:flex;gap:6px;align-items:center;font-size:10px">
+            적음 <span style="display:inline-flex;gap:2px">
+              <span style="width:10px;height:10px;border-radius:2px;background:var(--bg3);display:inline-block"></span>
+              <span style="width:10px;height:10px;border-radius:2px;background:rgba(61,127,255,.25);display:inline-block"></span>
+              <span style="width:10px;height:10px;border-radius:2px;background:rgba(61,127,255,.5);display:inline-block"></span>
+              <span style="width:10px;height:10px;border-radius:2px;background:rgba(61,127,255,.75);display:inline-block"></span>
+              <span style="width:10px;height:10px;border-radius:2px;background:#3d7fff;display:inline-block"></span>
+            </span> 많음
+          </span>
+        </div>
+        <div class="dash-heatmap">${heatCells.join('')}</div>
+      </div>
+    </div>
+
+    <!-- 태그 클라우드 -->
+    ${sortedTags.length ? `<div class="dash-section">
+      <div class="dash-shd">🏷️ 태그 클라우드
+        <span class="dash-shd-sub">클릭하면 태그 필터</span>
+      </div>
+      <div class="dash-body">
+        <div class="dash-tags">${tagCloudHtml}</div>
+      </div>
+    </div>` : ''}
+  `;
+
+  // ── 이벤트 바인딩
+  // 카테고리 카드 클릭
+  wrap.querySelectorAll('[data-nav]').forEach(el => {
+    el.addEventListener('click', () => { setView('grid'); goNav(el.dataset.nav); });
+  });
+  // 최근 활동 클릭
+  wrap.querySelectorAll('.dash-act-row[data-note-id]').forEach(el => {
+    el.addEventListener('click', () => openDet(el.dataset.noteId, false));
+  });
+  // 태그 클릭 → 태그 필터
+  wrap.querySelectorAll('.dash-tag[data-tag]').forEach(el => {
+    el.addEventListener('click', () => {
+      filterTag = el.dataset.tag;
+      setView('grid');
+      updateFilterUI();
+      renderNotes(); renderStats();
+    });
+  });
+}
+
 // ── 메모 렌더 ──
 function renderNotes() {
   const wrap = g('notes-wrap');
-  wrap.className = `v${view}`;
-  const list = getFiltered();
   const isT  = nav === 'trash';
   const q    = (g('search-inp')?.value || '').trim();
+
+  // 대시보드 뷰 (필터/목록과 독립)
+  if (view === 'dash') {
+    wrap.className = 'vdash';
+    renderDash(wrap);
+    return;
+  }
+
+  wrap.className = `v${view}`;
+  const list = getFiltered();
 
   if (!list.length) {
     wrap.innerHTML = `<div class="empty">
@@ -820,7 +1120,7 @@ function closeMobileSb() {
 // ══════════════════════════════════════════════════════
 function setView(mode) {
   view = mode;
-  ['grid', 'list', 'magazine', 'compact', 'timeline', 'kanban'].forEach(m => {
+  ['grid', 'list', 'magazine', 'compact', 'timeline', 'kanban', 'dash'].forEach(m => {
     const btn = g(`vb-${m}`);
     if (btn) btn.classList.toggle('on', m === mode);
   });
@@ -1249,6 +1549,26 @@ function bindEvents() {
   // 상세 모달
   g('det-close-btn').addEventListener('click', closeDet);
   g('det-ov').addEventListener('click', e => { if (e.target === g('det-ov')) closeDet(); });
+
+  // ── 필터 칩
+  const fcLink = g('fc-link');
+  if (fcLink) fcLink.addEventListener('click', () => {
+    filterLink = !filterLink; updateFilterUI(); renderNotes(); renderStats();
+  });
+  const fcWeek = g('fc-week');
+  if (fcWeek) fcWeek.addEventListener('click', () => {
+    filterPeriod = filterPeriod==='week' ? '' : 'week'; updateFilterUI(); renderNotes(); renderStats();
+  });
+  const fcMonth = g('fc-month');
+  if (fcMonth) fcMonth.addEventListener('click', () => {
+    filterPeriod = filterPeriod==='month' ? '' : 'month'; updateFilterUI(); renderNotes(); renderStats();
+  });
+  const chipClear = g('chip-clear');
+  if (chipClear) chipClear.addEventListener('click', clearFilters);
+
+  // ── 대시보드 뷰 버튼
+  const vbDash = g('vb-dash');
+  if (vbDash) vbDash.addEventListener('click', () => setView('dash'));
 }
 
 // ══════════════════════════════════════════════════════

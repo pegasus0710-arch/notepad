@@ -415,6 +415,69 @@ input[type="datetime-local"].fc{color-scheme:dark;}
 .ql-snow .ql-tooltip a.ql-action{color:var(--acc2)!important;}
 .ql-snow .ql-tooltip a.ql-remove{color:var(--red)!important;}
 .ql-snow .ql-tooltip.ql-editing a.ql-action::after{color:var(--acc2)!important;}
+
+/* ── 필터 칩 바 ── */
+.chip-bar{display:flex;flex-direction:column;gap:6px;padding:8px 16px;border-bottom:1px solid var(--bd);background:rgba(15,21,39,.5);}
+.chip-scroll{display:flex;align-items:center;gap:5px;overflow-x:auto;flex-wrap:wrap;padding-bottom:2px;}
+.chip-scroll::-webkit-scrollbar{height:3px;}
+.chip-cat{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1px solid var(--bd);background:rgba(255,255,255,.04);color:var(--t2);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;transition:.15s;flex-shrink:0;}
+.chip-cat:hover{border-color:var(--bd2);background:rgba(255,255,255,.08);}
+.chip-cat.on{background:var(--acc);border-color:var(--acc);color:#fff;}
+.chip-cat .cc-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.chip-cat .cc-cnt{font-size:10px;opacity:.75;margin-left:1px;}
+.chip-filters{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+.fchip{padding:3px 9px;border-radius:14px;border:1px solid var(--bd);background:transparent;color:var(--t3);font-size:11px;cursor:pointer;transition:.15s;white-space:nowrap;flex-shrink:0;}
+.fchip:hover{color:var(--t2);border-color:var(--bd2);}
+.fchip.on{background:rgba(255,208,96,.12);border-color:rgba(255,208,96,.35);color:var(--yellow);}
+.tag-chip-wrap{display:flex;gap:4px;flex-wrap:wrap;}
+.tchip{padding:3px 8px;border-radius:12px;border:1px solid rgba(90,110,154,.4);background:rgba(90,110,154,.1);color:var(--t3);font-size:11px;cursor:pointer;transition:.15s;}
+.tchip:hover{border-color:var(--acc);color:var(--acc2);}
+.tchip.on{background:rgba(61,127,255,.15);border-color:var(--acc);color:var(--acc2);}
+.chip-clear{padding:3px 10px;border-radius:12px;border:1px solid rgba(255,77,106,.3);background:rgba(255,77,106,.08);color:var(--red);font-size:11px;cursor:pointer;transition:.15s;white-space:nowrap;margin-left:auto;flex-shrink:0;}
+.chip-clear:hover{background:rgba(255,77,106,.16);}
+
+/* ── 대시보드 뷰 ── */
+.vdash{display:flex;flex-direction:column;gap:20px;}
+.dash-section{background:var(--card);border:1px solid var(--bd);border-radius:var(--rl);overflow:hidden;}
+.dash-shd{padding:14px 18px 10px;border-bottom:1px solid var(--bd);font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.dash-shd-sub{font-size:11px;color:var(--t3);font-weight:400;margin-left:auto;}
+.dash-body{padding:14px 18px;}
+/* 카테고리 카드 그리드 */
+.dash-cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}
+.dash-cat{border-radius:var(--r);padding:14px;cursor:pointer;transition:.18s;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.06);}
+.dash-cat:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.4);}
+.dash-cat-bar{position:absolute;left:0;top:0;bottom:0;width:3px;}
+.dash-cat-name{font-size:12px;font-weight:700;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dash-cat-cnt{font-size:26px;font-weight:900;line-height:1;margin-bottom:6px;}
+.dash-cat-recent{font-size:10px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* 최근 활동 */
+.dash-activity{display:flex;flex-direction:column;gap:6px;}
+.dash-act-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(42,58,92,.4);cursor:pointer;transition:.15s;}
+.dash-act-row:last-child{border-bottom:none;}
+.dash-act-row:hover{opacity:.8;}
+.dash-act-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.dash-act-title{flex:1;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dash-act-meta{font-size:10px;color:var(--t3);white-space:nowrap;display:flex;flex-direction:column;align-items:flex-end;gap:2px;}
+/* 태그 클라우드 */
+.dash-tags{display:flex;flex-wrap:wrap;gap:6px;}
+.dash-tag{padding:4px 10px;border-radius:14px;background:var(--bg3);border:1px solid var(--bd);color:var(--t2);font-size:11px;cursor:pointer;transition:.15s;}
+.dash-tag:hover{border-color:var(--acc);color:var(--acc2);}
+.dash-tag .dt-cnt{font-size:9px;color:var(--t3);margin-left:3px;}
+/* 통계 바 */
+.dash-stats-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.dash-stats-lbl{font-size:11px;color:var(--t2);width:80px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dash-stats-bar-wrap{flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;}
+.dash-stats-bar{height:100%;border-radius:3px;transition:.4s;}
+.dash-stats-cnt{font-size:11px;color:var(--t3);width:24px;text-align:right;flex-shrink:0;}
+/* 월별 히트맵 */
+.dash-heatmap{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+.dash-hm-cell{aspect-ratio:1;border-radius:3px;background:var(--bg3);cursor:pointer;transition:.15s;}
+.dash-hm-cell:hover{opacity:.75;}
+.dash-hm-cell.lv1{background:rgba(61,127,255,.25);}
+.dash-hm-cell.lv2{background:rgba(61,127,255,.5);}
+.dash-hm-cell.lv3{background:rgba(61,127,255,.75);}
+.dash-hm-cell.lv4{background:#3d7fff;}
+.dash-hm-label{display:flex;justify-content:space-between;font-size:10px;color:var(--t3);margin-bottom:4px;}
 .hidden{display:none!important;}
 </style>
   <!-- Quill.js 리치텍스트 에디터 -->
@@ -531,6 +594,9 @@ input[type="datetime-local"].fc{color-scheme:dark;}
         <button class="vbtn" id="vb-kanban" title="칸반">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="1" y="1" width="3.5" height="9" rx="1"/><rect x="5.25" y="1" width="3.5" height="6" rx="1"/><rect x="9.5" y="1" width="3.5" height="11" rx="1"/></svg>
         </button>
+        <button class="vbtn" id="vb-dash" title="대시보드">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="1" y="1" width="5" height="7" rx="1"/><rect x="8" y="1" width="5" height="4" rx="1"/><rect x="1" y="10" width="5" height="3" rx="1"/><rect x="8" y="7" width="5" height="6" rx="1"/></svg>
+        </button>
       </div>
       <div class="tl-grp-btn hidden" id="tl-grp-wrap">
         <button class="on" id="tl-grp-day"   title="일별">일</button>
@@ -543,6 +609,20 @@ input[type="datetime-local"].fc{color-scheme:dark;}
         <option value="md">✏️ 최근 수정순</option>
         <option value="ma">✏️ 오래된 수정순</option>
       </select>
+    </div>
+
+    <!-- 필터 칩 바 -->
+    <div class="chip-bar" id="chip-bar">
+      <div class="chip-scroll" id="chip-scroll">
+        <!-- 카테고리 칩은 JS에서 동적 생성 -->
+      </div>
+      <div class="chip-filters" id="chip-filters">
+        <button class="fchip" id="fc-link" data-filter="link">🔗 링크있음</button>
+        <button class="fchip" id="fc-week" data-filter="week">📅 이번주</button>
+        <button class="fchip" id="fc-month" data-filter="month">🗓 이번달</button>
+        <div class="tag-chip-wrap" id="tag-chip-wrap"></div>
+      </div>
+      <button class="chip-clear hidden" id="chip-clear">✕ 필터 해제</button>
     </div>
 
     <!-- PAGE HEADER -->
