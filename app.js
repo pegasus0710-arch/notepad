@@ -1170,6 +1170,10 @@ function initQuill() {
       }
     }
   });
+  // 기본 글자색 강제 설정 (Quill이 black을 기본값으로 주입하는 것 방지)
+  quillInst.format('color', false); // 인라인 color 속성 제거
+  quillInst.root.style.color = ''; // 인라인 스타일 초기화 → CSS var(--t) 적용
+
   // Quill 변경 시 hidden input 동기화 + 태그 추출
   quillInst.on('text-change', () => {
     const html  = quillInst.root.innerHTML;
