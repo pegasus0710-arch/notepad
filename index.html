@@ -482,8 +482,8 @@ input[type="datetime-local"].fc{color-scheme:dark;}
 /* ── 편집 모달 전용 (더 넓게) */
 .modal-edit{max-width:720px;}
 /* Quill: 고정 높이 + 내부 스크롤 */
-.modal-edit .ql-container{height:320px !important;overflow-y:auto !important;overflow-x:hidden !important;min-height:unset !important;}
-.modal-edit .ql-editor{min-height:300px;height:auto;max-height:none;overflow:visible;}
+.modal-edit .ql-container{height:280px;overflow-y:auto;overflow-x:hidden;min-height:unset !important;border-radius:0 !important;}
+.modal-edit .ql-editor{min-height:260px;height:auto;max-height:none;overflow:visible;}
 .modal-edit .quill-wrap{flex-shrink:0;}
 /* 모바일 */
 @media(max-width:520px){
@@ -499,8 +499,8 @@ input[type="datetime-local"].fc{color-scheme:dark;}
   background:var(--bg3);border:1px solid var(--bd);border-top:none;
   border-radius:0 0 9px 9px;transition:background .15s;flex-shrink:0;
   user-select:none;-webkit-user-select:none;
-  display:none;
 }
+
 .quill-resize-handle:hover,.quill-resize-handle.dragging{background:rgba(61,127,255,.18);border-color:var(--acc);}
 .quill-resize-handle::before{
   content:'';width:32px;height:3px;border-radius:2px;

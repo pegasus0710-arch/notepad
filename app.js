@@ -1180,18 +1180,26 @@ function initQuill() {
     renderTagPre();
   });
 
-  // ── Quill wheel 이벤트 → ql-container 내부 스크롤로 전달
+  // ── Quill 내부 마우스 스크롤
+  // ql-editor(내용 영역)와 ql-container(스크롤 박스) 모두 처리
   const qlRoot      = quillInst.root; // .ql-editor
   const qlContainer = qlRoot.closest('.ql-container');
-  qlRoot.addEventListener('wheel', (e) => {
-    if (qlContainer) {
-      qlContainer.scrollTop += e.deltaY;
-      e.stopPropagation();
-      e.preventDefault();
-    }
-  }, { passive: false });
 
-  // ── 툴바 mousedown 시 ql-container 스크롤 위치 보존
+  // wheel 이벤트: ql-editor 위에서 스크롤하면 ql-container가 스크롤되도록
+  if (qlContainer) {
+    qlContainer.addEventListener('wheel', (e) => {
+      // 스크롤 가능 범위 확인
+      const atTop    = qlContainer.scrollTop === 0 && e.deltaY < 0;
+      const atBottom = qlContainer.scrollTop + qlContainer.clientHeight >= qlContainer.scrollHeight - 1 && e.deltaY > 0;
+      if (!atTop && !atBottom) {
+        // 내부에서 소화 가능 → 이벤트 버블링 차단 (mbody 스크롤 방지)
+        e.stopPropagation();
+      }
+      // preventDefault는 하지 않음 → 브라우저 기본 스크롤 동작 유지
+    }, { passive: true });
+  }
+
+  // ── 툴바 mousedown 시 ql-container 스크롤 위치 보존 + 스크롤 점프 방지
   const toolbar = quillInst.getModule('toolbar');
   if (toolbar && toolbar.container) {
     toolbar.container.addEventListener('mousedown', e => {
@@ -1203,7 +1211,7 @@ function initQuill() {
     });
   }
 
-  // scrollIntoView 비활성화
+  // scrollIntoView 비활성화 (서식 적용 시 스크롤 점프 방지)
   quillInst.scrollIntoView = function() {};
 }
 
@@ -1608,24 +1616,28 @@ function initQuillResize() {
   let startY   = 0;
   let startH   = 0;
   const MIN_H  = 100;
-  const MAX_H  = 600;
+  const MAX_H  = 700;
   const PREF_KEY = 'quill_editor_height';
 
-  // 저장된 높이 복원
-  const saved = localStorage.getItem(PREF_KEY);
-  if (saved) applyHeight(parseInt(saved));
-
   function applyHeight(h) {
-    const clamped = Math.min(MAX_H, Math.max(MIN_H, h));
+    const clamped   = Math.min(MAX_H, Math.max(MIN_H, h));
     const container = wrap.querySelector('.ql-container');
-    if (container) container.style.height = clamped + 'px';
+    if (container) {
+      // setProperty로 !important 우선순위 덮어씀
+      container.style.setProperty('height', clamped + 'px', 'important');
+    }
     wrap.dataset.h = clamped;
   }
 
+  // 저장된 높이 복원 (약간 지연 — initQuill 완료 후)
+  setTimeout(() => {
+    const saved = localStorage.getItem(PREF_KEY);
+    if (saved) applyHeight(parseInt(saved));
+  }, 100);
+
   function onMove(e) {
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const diff    = clientY - startY;
-    applyHeight(startH + diff);
+    applyHeight(startH + (clientY - startY));
   }
 
   function onEnd() {
@@ -1634,7 +1646,6 @@ function initQuillResize() {
     document.removeEventListener('mouseup',   onEnd);
     document.removeEventListener('touchmove', onMove);
     document.removeEventListener('touchend',  onEnd);
-    // 높이 저장
     if (wrap.dataset.h) localStorage.setItem(PREF_KEY, wrap.dataset.h);
   }
 
@@ -1642,17 +1653,16 @@ function initQuillResize() {
     e.preventDefault();
     startY = e.clientY;
     const container = wrap.querySelector('.ql-container');
-    startH = container ? container.offsetHeight : 220;
+    startH = container ? container.offsetHeight : 280;
     handle.classList.add('dragging');
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup',   onEnd);
   });
 
-  // 터치 지원
   handle.addEventListener('touchstart', e => {
     startY = e.touches[0].clientY;
     const container = wrap.querySelector('.ql-container');
-    startH = container ? container.offsetHeight : 220;
+    startH = container ? container.offsetHeight : 280;
     handle.classList.add('dragging');
     document.addEventListener('touchmove', onMove, { passive: true });
     document.addEventListener('touchend',  onEnd);
