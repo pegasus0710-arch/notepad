@@ -191,12 +191,19 @@ async function deleteCat(id) {
 // 메모 CRUD
 // ══════════════════════════════════════════════════════
 async function createNote(data) {
+  const customDate = data._customCreatedAt || null;
+  const { _customCreatedAt, ...cleanData } = data;
   const ref = await addDoc(colNotes(), {
-    ...data, deleted: false,
-    createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+    ...cleanData, deleted: false,
+    createdAt: customDate || serverTimestamp(),
+    updatedAt: serverTimestamp()
   });
+  if (customDate) {
+    // serverTimestamp 대신 실제 Date 객체로 덮어쓰기
+    await setDoc(doc(colNotes(), ref.id), { createdAt: customDate }, { merge: true });
+  }
   const now = new Date();
-  notes.push({ ...data, deleted: false, _id: ref.id, createdAt: now, updatedAt: now });
+  notes.push({ ...cleanData, deleted: false, _id: ref.id, createdAt: customDate || now, updatedAt: now });
 }
 
 async function updateNote(id, data) {
@@ -826,8 +833,8 @@ function setView(mode) {
 // Quill 리치텍스트 에디터
 // ══════════════════════════════════════════════════════
 function initQuill() {
-  if (quillInst) return; // 이미 초기화됨
-  if (!window.Quill) return; // CDN 미로드
+  if (quillInst) return;
+  if (!window.Quill) return;
   const toolbarOptions = [
     [{ header: [1, 2, 3, false] }],
     ['bold', 'italic', 'underline', 'strike'],
@@ -840,7 +847,28 @@ function initQuill() {
   quillInst = new Quill('#e-content-quill', {
     theme: 'snow',
     placeholder: '내용을 입력하세요...',
-    modules: { toolbar: toolbarOptions }
+    modules: {
+      toolbar: {
+        container: toolbarOptions,
+        handlers: {
+          link: function(value) {
+            if (value) {
+              const range = this.quill.getSelection();
+              if (!range || range.length === 0) {
+                toast('링크를 붙일 텍스트를 먼저 선택하세요.', 'wrn');
+                return;
+              }
+              const url = prompt('링크 URL을 입력하세요:', 'https://');
+              if (url && url.trim() !== 'https://') {
+                this.quill.format('link', url.trim());
+              }
+            } else {
+              this.quill.format('link', false);
+            }
+          }
+        }
+      }
+    }
   });
   // Quill 변경 시 hidden input 동기화 + 태그 추출
   quillInst.on('text-change', () => {
@@ -882,6 +910,10 @@ function openAdd() {
   g('edit-modal-title').textContent = '새 메모';
   g('e-title').value   = '';
   g('e-content').value = '';
+  // 작성일자 기본값: 현재 시각
+  const _now = new Date();
+  _now.setMinutes(_now.getMinutes() - _now.getTimezoneOffset());
+  if (g('e-created-at')) g('e-created-at').value = _now.toISOString().slice(0,16);
   fillCatSelect();
   if (nav.startsWith('cat:')) g('e-cat').value = nav.slice(4);
   else g('e-cat').value = '';
@@ -898,6 +930,10 @@ function openEdit(id) {
   g('edit-modal-title').textContent = '메모 수정';
   g('e-title').value   = n.title   || '';
   g('e-content').value = n.content || '';
+  // 작성일자 로드
+  const _cdat = n.createdAt ? new Date(n.createdAt) : new Date();
+  _cdat.setMinutes(_cdat.getMinutes() - _cdat.getTimezoneOffset());
+  if (g('e-created-at')) g('e-created-at').value = _cdat.toISOString().slice(0,16);
   fillCatSelect();
   g('e-cat').value = n.category || '';
   renderTagPre();
@@ -910,19 +946,42 @@ function openEdit(id) {
   }, 80);
 }
 
-function closeEdit() { g('edit-ov').classList.remove('on'); }
+function closeEdit(force = false) {
+  if (!force) {
+    const hasTitle   = (g('e-title')?.value || '').trim().length > 0;
+    const hasContent = getQuillContent().replace(/<[^>]*>/g, '').trim().length > 0;
+    if (hasTitle || hasContent) {
+      if (!confirm('작성 중인 내용이 있습니다.\n저장하지 않고 닫을까요?')) return;
+    }
+  }
+  g('edit-ov').classList.remove('on');
+}
 
 async function saveNote() {
   const title    = g('e-title').value.trim();
-  const content  = g('e-content').value.trim();
+  const content  = getQuillContent();
   const category = g('e-cat').value;
   if (!title) { toast('제목을 입력해주세요.', 'wrn'); g('e-title').focus(); return; }
   const allTags = [...new Set([...eTags, ...extractTags(content)])];
   const data    = { title, content, category, tags: allTags, links: eLinks.filter(l => l?.url) };
+  // 작성일자 처리
+  const _createdAtVal = g('e-created-at')?.value;
+  const _createdAt    = _createdAtVal ? new Date(_createdAtVal) : null;
   try {
-    if (editId) { await updateNote(editId, data); toast('수정되었습니다. ✅'); }
-    else        { await createNote(data);          toast('저장되었습니다. ✅'); }
-    closeEdit();
+    if (editId) {
+      if (_createdAt) {
+        await setDoc(doc(colNotes(), editId), { createdAt: _createdAt }, { merge: true });
+        const ni = notes.findIndex(n => n._id === editId);
+        if (ni >= 0) notes[ni].createdAt = _createdAt;
+      }
+      await updateNote(editId, data);
+      toast('수정되었습니다. ✅');
+    } else {
+      if (_createdAt) data._customCreatedAt = _createdAt;
+      await createNote(data);
+      toast('저장되었습니다. ✅');
+    }
+    closeEdit(true);
     renderAll();
   } catch (err) { toast('저장 실패: ' + err.message, 'err'); }
 }
@@ -1174,7 +1233,7 @@ function bindEvents() {
   g('edit-close-btn').addEventListener('click',  closeEdit);
   g('edit-cancel-btn').addEventListener('click', closeEdit);
   g('save-btn').addEventListener('click', saveNote);
-  g('edit-ov').addEventListener('click', e => { if (e.target === g('edit-ov')) closeEdit(); });
+  g('edit-ov').addEventListener('click', e => { if (e.target === g('edit-ov')) closeEdit(false); });
 
   // 내용 입력 시 태그 자동 추출 (Quill 미사용 폴백)
   g('e-content').addEventListener('input', function() {
