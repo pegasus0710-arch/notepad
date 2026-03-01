@@ -1180,26 +1180,25 @@ function initQuill() {
     renderTagPre();
   });
 
-  // ── Quill wheel 이벤트 → 모달 스크롤로 전달
-  // Quill editor가 wheel 이벤트를 가로채는 것을 방지
-  const qlRoot = quillInst.root; // .ql-editor
+  // ── Quill wheel 이벤트 → ql-container 내부 스크롤로 전달
+  const qlRoot      = quillInst.root; // .ql-editor
+  const qlContainer = qlRoot.closest('.ql-container');
   qlRoot.addEventListener('wheel', (e) => {
-    const modal = document.querySelector('#edit-ov .modal');
-    if (modal) {
-      modal.scrollTop += e.deltaY;
+    if (qlContainer) {
+      qlContainer.scrollTop += e.deltaY;
+      e.stopPropagation();
       e.preventDefault();
     }
   }, { passive: false });
 
-  // ── 툴바 mousedown 시 모달 스크롤 위치 보존
+  // ── 툴바 mousedown 시 ql-container 스크롤 위치 보존
   const toolbar = quillInst.getModule('toolbar');
   if (toolbar && toolbar.container) {
     toolbar.container.addEventListener('mousedown', e => {
-      const modal = document.querySelector('#edit-ov .modal');
-      const savedTop = modal ? modal.scrollTop : 0;
+      const savedTop = qlContainer ? qlContainer.scrollTop : 0;
       e.preventDefault(); // 포커스 이탈 차단
       requestAnimationFrame(() => {
-        if (modal) modal.scrollTop = savedTop;
+        if (qlContainer) qlContainer.scrollTop = savedTop;
       });
     });
   }
