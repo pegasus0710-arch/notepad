@@ -48,6 +48,8 @@ let eTags  = [];        // 편집 중 태그 목록
 let eLinks = [];        // 편집 중 링크 목록 [{label, url}]
 
 let sbCollapsed = false; // 사이드바 접힘 상태
+let tlGroup   = 'day';  // 'day'|'month'|'year'
+let quillInst = null;  // Quill 인스턴스
 const thumbCache = new Map();  // 링크 썸네일 캐시
 
 // ══════════════════════════════════════════════════════
@@ -275,8 +277,15 @@ function domain(url) {
   catch { return url.slice(0, 30); }
 }
 
+function isRich(s) { return typeof s === 'string' && s.trimStart().startsWith('<'); }
+function stripHtml(s) {
+  if (!isRich(s)) return s || '';
+  const d = document.createElement('div'); d.innerHTML=s; return d.textContent||'';
+}
+
 function extractTags(text) {
-  return [...new Set((text.match(/#[\w가-힣]+/g) || []).map(t => t.slice(1)))];
+  const plain = isRich(text) ? stripHtml(text) : (text || '');
+  return [...new Set((plain.match(/#[\w가-힣]+/g) || []).map(t => t.slice(1)))];
 }
 
 function setSyncStatus(state) {
@@ -511,22 +520,30 @@ function compactHtml(n, isT) {
 // ─────────────────────────────────────────
 function timelineHtml(list, isT) {
   if (!list.length) return '';
-  // 날짜별 그룹핑
   const groups = new Map();
   list.forEach(n => {
     const d = n.createdAt ? new Date(n.createdAt) : new Date();
-    const key = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(n);
+    let key, label;
+    if (tlGroup === 'year') {
+      key = String(d.getFullYear());
+      label = `📆 ${d.getFullYear()}년`;
+    } else if (tlGroup === 'month') {
+      key = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}`;
+      label = `📅 ${d.getFullYear()}년 ${d.getMonth()+1}월`;
+    } else {
+      key = fmtShort(d);
+      label = (fmtShort(new Date())===key) ? `📅 오늘 · ${key}` : `📅 ${key}`;
+    }
+    if (!groups.has(key)) groups.set(key, {label, items:[]});
+    groups.get(key).items.push(n);
   });
   let html = '';
-  groups.forEach((items, dateKey) => {
-    const today = fmtShort(new Date()) === dateKey;
-    const label = today ? `📅 오늘 · ${dateKey}` : `📅 ${dateKey}`;
+  groups.forEach(({label, items}) => {
     html += `<div class="tl-group">
       <div class="tl-date-hd">
         <div class="tl-date-line"></div>
         <span class="tl-date-lbl">${label}</span>
+        <span style="font-size:10px;color:var(--t3);flex-shrink:0">${items.length}개</span>
         <div class="tl-date-line"></div>
       </div>
       <div class="tl-items">
@@ -537,9 +554,6 @@ function timelineHtml(list, isT) {
   return html;
 }
 
-// ─────────────────────────────────────────
-// KANBAN VIEW
-// ─────────────────────────────────────────
 function renderKanban(wrap, list, isT) {
   wrap.className = '';
   wrap.style.cssText = '';
@@ -688,7 +702,7 @@ function cardHtml(n, isT) {
       <div class="ntitle">${esc(n.title || '제목 없음')}</div>
       <span class="nbadge ${badgeCls(n.category)}">${esc(catLabel(n.category))}</span>
     </div>
-    ${n.content ? `<div class="nbody">${esc(n.content)}</div>` : ''}
+    ${n.content ? `<div class="nbody">${isRich(n.content) ? esc(stripHtml(n.content)).slice(0,180) : esc(n.content)}</div>` : ''}
     ${hasLink ? `<div class="lprev-slot"></div>` : ''}
     ${linksHtml(n.links)}
     ${tagsHtml(n.tags)}
@@ -704,7 +718,8 @@ function cardHtml(n, isT) {
 }
 
 function listHtml(n, isT) {
-  const prev = (n.content || '').replace(/\n/g, ' ').slice(0, 90);
+  const rawContent = isRich(n.content) ? stripHtml(n.content) : (n.content || '');
+  const prev = rawContent.replace(/\n/g, ' ').slice(0, 90);
   return `<div class="nl ${barCls(n.category)}" data-note-id="${n._id}" data-istrash="${isT?'1':'0'}">
     <span class="nldot ${dotCls(n.category)}"></span>
     <div class="nlmain">
@@ -732,7 +747,7 @@ function magHtml(n, isT) {
         <div class="ntitle">${esc(n.title || '제목 없음')}</div>
         <span class="nbadge ${badgeCls(n.category)}">${esc(catLabel(n.category))}</span>
       </div>
-      ${n.content ? `<div class="nbody">${esc(n.content)}</div>` : ''}
+      ${n.content ? `<div class="nbody">${isRich(n.content) ? esc(stripHtml(n.content)).slice(0,180) : esc(n.content)}</div>` : ''}
       ${(n.links||[]).some(l=>l?.url) ? `<div class="lprev-slot"></div>` : ''}
       ${linksHtml(n.links)}
       ${tagsHtml(n.tags)}
@@ -802,7 +817,61 @@ function setView(mode) {
     const btn = g(`vb-${m}`);
     if (btn) btn.classList.toggle('on', m === mode);
   });
+  const _tlw = g('tl-grp-wrap');
+  if (_tlw) _tlw.classList.toggle('hidden', mode !== 'timeline');
   renderNotes();
+}
+
+// ══════════════════════════════════════════════════════
+// Quill 리치텍스트 에디터
+// ══════════════════════════════════════════════════════
+function initQuill() {
+  if (quillInst) return; // 이미 초기화됨
+  if (!window.Quill) return; // CDN 미로드
+  const toolbarOptions = [
+    [{ header: [1, 2, 3, false] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ color: [] }, { background: [] }],
+    [{ list: 'ordered' }, { list: 'bullet' }],
+    ['blockquote', 'code-block'],
+    ['link'],
+    ['clean']
+  ];
+  quillInst = new Quill('#e-content-quill', {
+    theme: 'snow',
+    placeholder: '내용을 입력하세요...',
+    modules: { toolbar: toolbarOptions }
+  });
+  // Quill 변경 시 hidden input 동기화 + 태그 추출
+  quillInst.on('text-change', () => {
+    const html  = quillInst.root.innerHTML;
+    const plain = quillInst.getText();
+    g('e-content').value = html === '<p><br></p>' ? '' : html;
+    const newTags = extractTags(plain);
+    newTags.forEach(t => { if (!eTags.includes(t)) eTags.push(t); });
+    renderTagPre();
+  });
+}
+
+function setQuillContent(html) {
+  if (!quillInst) initQuill();
+  if (!quillInst) return;
+  if (!html) {
+    quillInst.setContents([]);
+    return;
+  }
+  if (isRich(html)) {
+    quillInst.root.innerHTML = html;
+  } else {
+    // 평문이면 텍스트로 삽입
+    quillInst.setText(html);
+  }
+}
+
+function getQuillContent() {
+  if (!quillInst) return g('e-content').value || '';
+  const html = quillInst.root.innerHTML;
+  return html === '<p><br></p>' ? '' : html;
 }
 
 // ══════════════════════════════════════════════════════
@@ -819,7 +888,7 @@ function openAdd() {
   renderTagPre();
   renderLinkRows();
   g('edit-ov').classList.add('on');
-  setTimeout(() => g('e-title').focus(), 80);
+  setTimeout(() => { initQuill(); setQuillContent(''); g('e-title').focus(); }, 80);
 }
 
 function openEdit(id) {
@@ -835,6 +904,10 @@ function openEdit(id) {
   renderLinkRows();
   g('edit-ov').classList.add('on');
   closeDet();
+  setTimeout(() => {
+    initQuill();
+    setQuillContent(n.content || '');
+  }, 80);
 }
 
 function closeEdit() { g('edit-ov').classList.remove('on'); }
@@ -951,7 +1024,7 @@ function openDet(id, isT) {
 
   g('det-body').innerHTML = `
     <span class="nbadge ${badgeCls(n.category)}" style="width:fit-content">${esc(catLabel(n.category))}</span>
-    ${n.content ? `<div class="detcontent">${esc(n.content)}</div>` : ''}
+    ${n.content ? (isRich(n.content) ? `<div class="det-rich">${n.content}</div>` : `<div class="detcontent">${esc(n.content)}</div>`) : ''}
     ${links.length ? `<div class="detlinks" style="flex-direction:column">${linkSlotsHtml}</div>` : ''}
     ${tagsHtml(n.tags)}
     <div class="detmeta">
@@ -1071,6 +1144,26 @@ function bindEvents() {
   g('vb-timeline').addEventListener('click', () => setView('timeline'));
   g('vb-kanban').addEventListener('click',   () => setView('kanban'));
 
+  // 타임라인 그룹 토글
+  ['day','month','year'].forEach(unit => {
+    const btn = g(`tl-grp-${unit}`);
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      tlGroup = unit;
+      ['day','month','year'].forEach(u => g(`tl-grp-${u}`)?.classList.toggle('on', u === unit));
+      if (view === 'timeline') renderNotes();
+    });
+  });
+  // 타임라인 그룹 토글
+  ['day','month','year'].forEach(unit => {
+    const _b = g('tl-grp-' + unit);
+    if (!_b) return;
+    _b.addEventListener('click', () => {
+      tlGroup = unit;
+      ['day','month','year'].forEach(u => { const b2=g('tl-grp-'+u); if(b2) b2.classList.toggle('on', u===unit); });
+      if (view === 'timeline') renderNotes();
+    });
+  });
   // 정렬
   g('sort-sel').addEventListener('change', () => renderNotes());
 
@@ -1083,8 +1176,9 @@ function bindEvents() {
   g('save-btn').addEventListener('click', saveNote);
   g('edit-ov').addEventListener('click', e => { if (e.target === g('edit-ov')) closeEdit(); });
 
-  // 내용 입력 시 태그 자동 추출
+  // 내용 입력 시 태그 자동 추출 (Quill 미사용 폴백)
   g('e-content').addEventListener('input', function() {
+    if (quillInst) return; // Quill이 처리함
     const newTags = extractTags(this.value);
     newTags.forEach(t => { if (!eTags.includes(t)) eTags.push(t); });
     renderTagPre();

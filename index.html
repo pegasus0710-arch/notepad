@@ -361,8 +361,53 @@ select.fc option{background:var(--card2);}
   .hdr-in{padding:0 10px;gap:6px;}
   .hsort{display:none;}
 }
+
+/* ── QUILL EDITOR OVERRIDE ── */
+.ql-toolbar{background:var(--bg3);border:1px solid var(--bd)!important;border-radius:9px 9px 0 0!important;padding:6px 8px!important;}
+.ql-container{background:var(--bg3);border:1px solid var(--bd)!important;border-top:none!important;border-radius:0 0 9px 9px!important;min-height:140px;font-family:'Noto Sans KR',sans-serif;font-size:13px;color:var(--t);}
+.ql-editor{min-height:140px;line-height:1.75;color:var(--t);}
+.ql-editor.ql-blank::before{color:var(--t3);font-style:normal;}
+.ql-snow .ql-stroke{stroke:var(--t2)!important;}
+.ql-snow .ql-fill{fill:var(--t2)!important;}
+.ql-snow .ql-picker{color:var(--t2)!important;}
+.ql-snow .ql-picker-options{background:var(--card2)!important;border:1px solid var(--bd)!important;border-radius:8px!important;}
+.ql-snow .ql-picker-item{color:var(--t2)!important;}
+.ql-snow .ql-picker-item:hover,.ql-snow .ql-picker-item.ql-selected{color:var(--acc)!important;}
+.ql-snow .ql-active .ql-stroke{stroke:var(--acc)!important;}
+.ql-snow .ql-active .ql-fill{fill:var(--acc)!important;}
+.ql-snow .ql-active{color:var(--acc)!important;}
+.ql-snow button:hover .ql-stroke{stroke:var(--acc)!important;}
+/* 타임라인 그룹 토글 */
+.tl-grp-btn{display:flex;gap:3px;margin-left:4px;}
+.tl-grp-btn button{padding:4px 9px;border-radius:6px;border:1px solid var(--bd);background:transparent;color:var(--t3);font-size:11px;font-weight:600;cursor:pointer;transition:.15s;}
+.tl-grp-btn button:hover{color:var(--t2);border-color:var(--bd2);}
+.tl-grp-btn button.on{background:var(--acc);border-color:var(--acc);color:#fff;}
+/* 리치텍스트 렌더 */
+.rich-body{font-size:12px;color:var(--t2);line-height:1.75;}
+.rich-body h1,.rich-body h2,.rich-body h3{color:var(--t);font-weight:700;margin:4px 0 2px;}
+.rich-body h1{font-size:16px;}.rich-body h2{font-size:14px;}.rich-body h3{font-size:13px;}
+.rich-body ul,.rich-body ol{padding-left:16px;margin:4px 0;}
+.rich-body li{margin:2px 0;}
+.rich-body strong{color:var(--t);font-weight:700;}
+.rich-body em{font-style:italic;}
+.rich-body a{color:var(--acc2);text-decoration:underline;}
+.rich-body blockquote{border-left:3px solid var(--acc);padding-left:10px;color:var(--t3);margin:6px 0;}
+.rich-body pre{background:var(--bg3);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;font-size:11px;overflow-x:auto;}
+.det-rich{font-size:13px;line-height:1.8;color:var(--t2);}
+.det-rich h1,.det-rich h2,.det-rich h3{color:var(--t);font-weight:700;margin:8px 0 4px;}
+.det-rich h1{font-size:18px;}.det-rich h2{font-size:16px;}.det-rich h3{font-size:14px;}
+.det-rich ul,.det-rich ol{padding-left:18px;margin:6px 0;}
+.det-rich li{margin:3px 0;}
+.det-rich strong{color:var(--t);font-weight:700;}
+.det-rich em{font-style:italic;}
+.det-rich a{color:var(--acc2);text-decoration:underline;}
+.det-rich blockquote{border-left:3px solid var(--acc);padding-left:12px;color:var(--t3);margin:8px 0;font-style:italic;}
+.det-rich pre{background:var(--bg3);border:1px solid var(--bd);border-radius:8px;padding:10px 14px;font-size:12px;overflow-x:auto;}
 .hidden{display:none!important;}
 </style>
+  <!-- Quill.js 리치텍스트 에디터 -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.snow.min.css" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.min.js"></script>
 </head>
 <body>
 
@@ -475,6 +520,11 @@ select.fc option{background:var(--card2);}
           <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="1" y="1" width="3.5" height="9" rx="1"/><rect x="5.25" y="1" width="3.5" height="6" rx="1"/><rect x="9.5" y="1" width="3.5" height="11" rx="1"/></svg>
         </button>
       </div>
+      <div class="tl-grp-btn hidden" id="tl-grp-wrap">
+        <button class="on" id="tl-grp-day"   title="일별">일</button>
+        <button          id="tl-grp-month" title="월별">월</button>
+        <button          id="tl-grp-year"  title="연도별">연</button>
+      </div>
       <select class="hsort" id="sort-sel">
         <option value="cd">📅 최신 작성순</option>
         <option value="ca">📅 오래된 순</option>
@@ -510,7 +560,8 @@ select.fc option{background:var(--card2);}
       </div>
       <div class="fg">
         <label class="fl">내용 (#태그 자동 추출)</label>
-        <textarea class="fc" id="e-content" placeholder="내용을 입력하세요..."></textarea>
+        <div id="e-content-quill"></div>
+        <input type="hidden" id="e-content">
       </div>
       <div class="fg">
         <label class="fl">카테고리</label>
