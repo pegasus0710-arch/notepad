@@ -1668,7 +1668,7 @@ function loadDraftIfExists() {
   try {
     const draft = JSON.parse(raw);
     const ago   = Math.round((Date.now() - draft.savedAt) / 60000);
-    const ok    = confirm(`${ago}분 전 임시저장된 글이 있습니다.\n제목: "${draft.title || '(없음')}"\n\n불러올까요?`);
+    const ok = confirm(ago + '분 전 임시저장본이 있습니다.\n제목: [' + (draft.title||'없음') + ']\n불러올까요?');
     if (!ok) { clearDraft(); return false; }
     if (g('e-title')) g('e-title').value = draft.title || '';
     if (draft.catId && g('e-cat')) g('e-cat').value = draft.catId;
