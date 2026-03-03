@@ -48,6 +48,11 @@ let filterLink  = false;   // 링크있음 필터
 let filterPeriod = '';     // 'week'|'month'|''
 let filterTag   = '';      // 태그 필터 문자열
 
+// ── 설정 상태
+let perPage    = parseInt(localStorage.getItem('cfg_perPage') || '20');
+let scrollMode = localStorage.getItem('cfg_scrollMode') || 'scroll'; // 'scroll'|'page'
+let curPage    = 1;
+
 let editId = null;      // 수정 중인 메모 ID (null = 신규)
 let eTags  = [];        // 편집 중 태그 목록
 let eLinks = [];        // 편집 중 링크 목록 [{label, url}]
@@ -353,9 +358,14 @@ function getFiltered() {
   if (filterLink) list = list.filter(n => (n.links||[]).some(l=>l?.url));
   if (filterTag)  list = list.filter(n => (n.tags||[]).includes(filterTag));
   if (filterPeriod) {
-    const now  = Date.now();
-    const cutoff = filterPeriod === 'week' ? now - 7*864e5 : now - 30*864e5;
-    list = list.filter(n => n.createdAt && new Date(n.createdAt).getTime() >= cutoff);
+    if (filterPeriod === 'today') {
+      const todStr = new Date().toDateString();
+      list = list.filter(n => n.createdAt && new Date(n.createdAt).toDateString() === todStr);
+    } else {
+      const now_ = Date.now();
+      const cutoff = filterPeriod === 'week' ? now_ - 7*864e5 : now_ - 30*864e5;
+      list = list.filter(n => n.createdAt && new Date(n.createdAt).getTime() >= cutoff);
+    }
   }
   const key = (sort === 'cd' || sort === 'ca') ? 'createdAt' : 'updatedAt';
   const asc = (sort === 'ca' || sort === 'ma');
@@ -546,192 +556,93 @@ function clearFilters() {
 // ══════════════════════════════════════════════════════
 function renderDash(wrap) {
   wrap.className = 'vdash';
-  const total = notes.length;
-  const dotColors = ['#3d7fff','#00c896','#ffd060','#a855f7','#06b6d4','#ec4899','#10b981','#f59e0b'];
-  const bgColors  = [
-    'rgba(61,127,255,.08)','rgba(0,200,150,.08)','rgba(255,208,96,.08)',
-    'rgba(168,85,247,.08)','rgba(6,182,212,.08)','rgba(236,72,153,.08)',
-    'rgba(16,185,129,.08)','rgba(245,158,11,.08)'
-  ];
-  const barColors = [
-    'linear-gradient(90deg,#3d7fff,#5b9bff)','linear-gradient(90deg,#00c896,#00e6a8)',
-    'linear-gradient(90deg,#ffd060,#ff9500)','linear-gradient(90deg,#a855f7,#c084fc)',
-    'linear-gradient(90deg,#06b6d4,#22d3ee)','linear-gradient(90deg,#ec4899,#f97316)',
-    'linear-gradient(90deg,#10b981,#34d399)','linear-gradient(90deg,#f59e0b,#fbbf24)'
-  ];
+  const total   = notes.length;
+  const starred = notes.filter(n => n.starred).length;
+  const uncat   = notes.filter(n => !n.category || !cats.find(c=>c._id===n.category)).length;
+  const DOT=['#3d7fff','#00c896','#ffd060','#a855f7','#06b6d4','#ec4899','#10b981','#f59e0b'];
+  const BG=['rgba(61,127,255,.09)','rgba(0,200,150,.09)','rgba(255,208,96,.09)',
+            'rgba(168,85,247,.09)','rgba(6,182,212,.09)','rgba(236,72,153,.09)',
+            'rgba(16,185,129,.09)','rgba(245,158,11,.09)'];
+  const now=new Date();
+  const thisM=notes.filter(n=>{const dd=n.createdAt?new Date(n.createdAt):null;return dd&&dd.getFullYear()===now.getFullYear()&&dd.getMonth()===now.getMonth();}).length;
+  const today=notes.filter(n=>{const dd=n.createdAt?new Date(n.createdAt):null;return dd&&dd.toDateString()===now.toDateString();}).length;
+  const tagMap={};
+  notes.forEach(n=>(n.tags||[]).forEach(t=>{tagMap[t]=(tagMap[t]||0)+1;}));
+  const topTags=Object.entries(tagMap).sort((a,b)=>b[1]-a[1]).slice(0,20);
+  const maxTC=topTags[0]?.[1]||1;
+  const heatMap={};
+  notes.forEach(n=>{if(!n.createdAt)return;const key=new Date(n.createdAt).toDateString();heatMap[key]=(heatMap[key]||0)+1;});
+  const heatCells=[];
+  for(let k=27;k>=0;k--){const dd=new Date(now);dd.setDate(now.getDate()-k);const cnt=heatMap[dd.toDateString()]||0;const lv=cnt===0?0:cnt===1?1:cnt<=3?2:cnt<=5?3:4;const lbl=`${dd.getMonth()+1}/${dd.getDate()}(${['일','월','화','수','목','금','토'][dd.getDay()]}) ${cnt}개`;heatCells.push(`<div class="heat-cell lv${lv}" title="${lbl}"></div>`);}
+  const catItems=cats.map((c,idx)=>{const ci=idx%8;const cnt=notes.filter(n=>n.category===c._id).length;const recent=notes.filter(n=>n.category===c._id).sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0))[0];return{c,ci,cnt,recent};});
+  const recent8=[...notes].sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0)).slice(0,8);
 
-  // ── 카테고리 카드
-  const catItems = cats.map((c,i) => {
-    const ci  = i%8;
-    const cnt = notes.filter(n=>n.category===c._id).length;
-    const recent = notes.filter(n=>n.category===c._id)
-      .sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0))[0];
-    return {c, ci, cnt, recent};
-  });
-  const uncatCnt = notes.filter(n=>!n.category||!cats.find(c=>c._id===n.category)).length;
-
-  const catCardsHtml = catItems.map(({c,ci,cnt,recent}) => `
-    <div class="dash-cat" data-nav="cat:${esc(c._id)}"
-      style="background:${bgColors[ci]}">
-      <div class="dash-cat-bar" style="background:${dotColors[ci]}"></div>
-      <div class="dash-cat-name">${esc(c.name)}</div>
-      <div class="dash-cat-cnt" style="color:${dotColors[ci]}">${cnt}</div>
-      <div class="dash-cat-recent">${recent ? esc(recent.title||'제목없음') : '메모 없음'}</div>
-    </div>`).join('') +
-    (uncatCnt > 0 ? `<div class="dash-cat" data-nav="all" style="background:rgba(90,110,154,.08)">
-      <div class="dash-cat-bar" style="background:var(--t3)"></div>
-      <div class="dash-cat-name">카테고리없음</div>
-      <div class="dash-cat-cnt" style="color:var(--t3)">${uncatCnt}</div>
-      <div class="dash-cat-recent">미분류 메모</div>
-    </div>` : '');
-
-  // ── 카테고리 비율 바
-  const ratioRows = catItems.map(({c,ci,cnt}) => {
-    const pct = total ? Math.round(cnt/total*100) : 0;
-    return `<div class="dash-stats-row">
-      <span class="dash-stats-lbl">${esc(c.name)}</span>
-      <div class="dash-stats-bar-wrap">
-        <div class="dash-stats-bar" style="width:${pct}%;background:${barColors[ci]}"></div>
-      </div>
-      <span class="dash-stats-cnt">${cnt}</span>
-    </div>`;
-  }).join('');
-
-  // ── 최근 10개 활동
-  const recent10 = [...notes].sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0)).slice(0,10);
-  const actHtml = recent10.map(n => {
-    const ci = catColorIdx(n.category);
-    const col = ci>=0 ? dotColors[ci] : 'var(--t3)';
-    return `<div class="dash-act-row" data-note-id="${n._id}">
-      <span class="dash-act-dot" style="background:${col}"></span>
-      <span class="dash-act-title">${esc(n.title||'제목없음')}</span>
-      <span class="dash-act-meta">
-        <span>${ci>=0?esc(catLabel(n.category)):''}</span>
-        <span>${fmtShort(n.updatedAt||n.createdAt)}</span>
-      </span>
-    </div>`;
-  }).join('');
-
-  // ── 태그 클라우드
-  const tagCount = {};
-  notes.forEach(n=>(n.tags||[]).forEach(t=>{tagCount[t]=(tagCount[t]||0)+1;}));
-  const sortedTags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,30);
-  const maxCnt = sortedTags[0]?.[1]||1;
-  const tagCloudHtml = sortedTags.map(([t,cnt]) => {
-    const size = 10 + Math.round((cnt/maxCnt)*6);
-    return `<span class="dash-tag" data-tag="${esc(t)}" style="font-size:${size}px">#${esc(t)}<span class="dt-cnt">${cnt}</span></span>`;
-  }).join('');
-
-  // ── 최근 30일 히트맵
-  const heatCells = [];
-  const today = new Date(); today.setHours(23,59,59,999);
-  const heatLabels = [];
-  for (let i=27;i>=0;i--) {
-    const d = new Date(today); d.setDate(d.getDate()-i);
-    const dayStr = fmtShort(d);
-    const cnt = notes.filter(n=>fmtShort(n.createdAt)===dayStr).length;
-    const lv = cnt===0?'':cnt===1?'lv1':cnt<=3?'lv2':cnt<=6?'lv3':'lv4';
-    heatCells.push(`<div class="dash-hm-cell${lv?' '+lv:''}" title="${dayStr}: ${cnt}개"></div>`);
-    if (i%7===0||i===0) heatLabels.push(`<span>${d.getMonth()+1}/${d.getDate()}</span>`);
-  }
-  // 오늘 요일에 맞게 앞에 빈칸 추가
-  const todayDow = today.getDay(); // 0=일
-  const padStart = (todayDow+1)%7; // 월요일 시작 기준
-  const padCells = Array(Math.max(0,28-heatCells.length)).fill('<div class="dash-hm-cell"></div>');
-
-  // ── 링크 있는 메모 수
-  const linkNotes = notes.filter(n=>(n.links||[]).some(l=>l?.url));
-
-  wrap.innerHTML = `
-    <!-- 요약 통계 -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px">
-      ${[
-        {label:'전체 메모', val:total, icon:'📝', col:'var(--acc)'},
-        {label:'카테고리', val:cats.length, icon:'🗂️', col:'var(--green)'},
-        {label:'링크 메모', val:linkNotes.length, icon:'🔗', col:'var(--yellow)'},
-        {label:'휴지통', val:trashed.length, icon:'🗑️', col:'var(--red)'},
-      ].map(s=>`<div style="background:var(--card);border:1px solid var(--bd);border-radius:var(--r);padding:14px;text-align:center">
-        <div style="font-size:22px;margin-bottom:6px">${s.icon}</div>
-        <div style="font-size:22px;font-weight:900;color:${s.col};line-height:1">${s.val}</div>
-        <div style="font-size:10px;color:var(--t3);margin-top:4px">${s.label}</div>
-      </div>`).join('')}
+  wrap.innerHTML=`
+  <div class="dash-grid">
+    <div class="dash-summaries">
+      <div class="dash-sum" data-nav="all"><div class="dash-sum-icon" style="background:rgba(61,127,255,.15);color:#3d7fff">📝</div><div class="dash-sum-info"><div class="dash-sum-num">${total}</div><div class="dash-sum-lbl">전체 메모</div></div></div>
+      <div class="dash-sum" data-nav="today"><div class="dash-sum-icon" style="background:rgba(0,200,150,.15);color:#00c896">🌟</div><div class="dash-sum-info"><div class="dash-sum-num">${today}</div><div class="dash-sum-lbl">오늘 작성</div></div></div>
+      <div class="dash-sum" data-nav="month"><div class="dash-sum-icon" style="background:rgba(255,208,96,.15);color:#ffd060">📅</div><div class="dash-sum-info"><div class="dash-sum-num">${thisM}</div><div class="dash-sum-lbl">이번달 작성</div></div></div>
+      <div class="dash-sum" data-nav="starred"><div class="dash-sum-icon" style="background:rgba(168,85,247,.15);color:#a855f7">★</div><div class="dash-sum-info"><div class="dash-sum-num">${starred}</div><div class="dash-sum-lbl">즐겨찾기</div></div></div>
     </div>
-
-    <!-- 카테고리 카드 -->
-    ${cats.length ? `<div class="dash-section">
-      <div class="dash-shd">🗂️ 카테고리별 메모
-        <span class="dash-shd-sub">클릭하면 해당 카테고리로 이동</span>
-      </div>
-      <div class="dash-body">
-        <div class="dash-cats">${catCardsHtml}</div>
-      </div>
-    </div>` : ''}
-
-    <!-- 비율 바 + 최근 활동 (2열) -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-      ${cats.length ? `<div class="dash-section">
-        <div class="dash-shd">📊 카테고리 비율</div>
-        <div class="dash-body">${ratioRows||'<span style="color:var(--t3);font-size:12px">카테고리 없음</span>'}</div>
-      </div>` : ''}
-      <div class="dash-section" ${cats.length?'':'style="grid-column:1/-1"'}>
-        <div class="dash-shd">⚡ 최근 활동
-          <span class="dash-shd-sub">최근 수정순 10개</span>
-        </div>
-        <div class="dash-body">
-          <div class="dash-activity">${actHtml||'<span style="color:var(--t3);font-size:12px">메모 없음</span>'}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 활동 히트맵 -->
     <div class="dash-section">
-      <div class="dash-shd">📅 최근 28일 작성 현황</div>
-      <div class="dash-body">
-        <div class="dash-hm-label">
-          <span style="display:flex;gap:6px;align-items:center;font-size:10px">
-            적음 <span style="display:inline-flex;gap:2px">
-              <span style="width:10px;height:10px;border-radius:2px;background:var(--bg3);display:inline-block"></span>
-              <span style="width:10px;height:10px;border-radius:2px;background:rgba(61,127,255,.25);display:inline-block"></span>
-              <span style="width:10px;height:10px;border-radius:2px;background:rgba(61,127,255,.5);display:inline-block"></span>
-              <span style="width:10px;height:10px;border-radius:2px;background:rgba(61,127,255,.75);display:inline-block"></span>
-              <span style="width:10px;height:10px;border-radius:2px;background:#3d7fff;display:inline-block"></span>
-            </span> 많음
-          </span>
-        </div>
-        <div class="dash-heatmap">${heatCells.join('')}</div>
+      <div class="dash-sec-hd"><span class="dash-sec-title">📂 카테고리</span><span class="dash-sec-sub">${cats.length}개</span></div>
+      <div class="dash-cats">
+        ${catItems.map(({c,ci,cnt,recent})=>`
+          <div class="dash-cat" data-nav="cat:${esc(c._id)}" style="background:${BG[ci]}">
+            <div class="dash-cat-accent" style="background:${DOT[ci]}"></div>
+            <div class="dash-cat-top"><span class="dash-cat-name">${esc(c.name)}</span><span class="dash-cat-cnt" style="color:${DOT[ci]}">${cnt}</span></div>
+            <div class="dash-cat-bar-wrap"><div class="dash-cat-bar-fill" style="width:${total?Math.round(cnt/total*100):0}%;background:${DOT[ci]}"></div></div>
+            <div class="dash-cat-recent">${recent?esc((recent.title||'제목없음').slice(0,28)):'메모 없음'}</div>
+          </div>`).join('')}
+        ${uncat>0?`<div class="dash-cat" data-nav="uncat" style="background:rgba(90,110,154,.08)">
+          <div class="dash-cat-accent" style="background:var(--t3)"></div>
+          <div class="dash-cat-top"><span class="dash-cat-name">미분류</span><span class="dash-cat-cnt" style="color:var(--t3)">${uncat}</span></div>
+          <div class="dash-cat-bar-wrap"><div class="dash-cat-bar-fill" style="width:${total?Math.round(uncat/total*100):0}%;background:var(--t3)"></div></div>
+          <div class="dash-cat-recent">카테고리 없는 메모</div></div>`:''}
       </div>
     </div>
-
-    <!-- 태그 클라우드 -->
-    ${sortedTags.length ? `<div class="dash-section">
-      <div class="dash-shd">🏷️ 태그 클라우드
-        <span class="dash-shd-sub">클릭하면 태그 필터</span>
+    <div class="dash-bottom">
+      <div class="dash-section">
+        <div class="dash-sec-hd"><span class="dash-sec-title">🕐 최근 활동</span></div>
+        <div class="dash-recent">
+          ${recent8.map(n=>{const ci=catColorIdx(n.category);const col=ci>=0?DOT[ci]:'var(--t3)';const cat=catLabel(n.category);return`<div class="dash-act" data-note-id="${n._id}"><span class="dash-act-dot" style="background:${col}"></span><div class="dash-act-body"><span class="dash-act-title">${esc((n.title||'제목없음').slice(0,30))}</span><span class="dash-act-meta">${cat!=='카테고리없음'?esc(cat)+' · ':''}${fmtShort(n.updatedAt||n.createdAt)}</span></div></div>`;}).join('')}
+        </div>
       </div>
-      <div class="dash-body">
-        <div class="dash-tags">${tagCloudHtml}</div>
+      <div class="dash-section">
+        <div class="dash-sec-hd"><span class="dash-sec-title">📊 최근 28일 활동</span></div>
+        <div class="dash-heatmap">${heatCells.join('')}</div>
+        <div class="dash-heat-legend"><span>없음</span><div class="heat-cell lv0"></div><div class="heat-cell lv1"></div><div class="heat-cell lv2"></div><div class="heat-cell lv3"></div><div class="heat-cell lv4"></div><span>많음</span></div>
       </div>
-    </div>` : ''}
-  `;
+      <div class="dash-section">
+        <div class="dash-sec-hd"><span class="dash-sec-title">🏷 태그 클라우드</span><span class="dash-sec-sub">${topTags.length}개</span></div>
+        <div class="dash-tagcloud">
+          ${topTags.map(([tag,cnt])=>{const r=cnt/maxTC;const sz=10+Math.round(r*14);const op=0.5+r*0.5;return`<span class="dash-tag" data-tag="${esc(tag)}" style="font-size:${sz}px;opacity:${op}">#${esc(tag)} <sup>${cnt}</sup></span>`;}).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
 
-  // ── 이벤트 바인딩
-  // 카테고리 카드 클릭
-  wrap.querySelectorAll('[data-nav]').forEach(el => {
-    el.addEventListener('click', () => { setView('grid'); goNav(el.dataset.nav); });
-  });
-  // 최근 활동 클릭
-  wrap.querySelectorAll('.dash-act-row[data-note-id]').forEach(el => {
-    el.addEventListener('click', () => openDet(el.dataset.noteId, false));
-  });
-  // 태그 클릭 → 태그 필터
-  wrap.querySelectorAll('.dash-tag[data-tag]').forEach(el => {
-    el.addEventListener('click', () => {
-      filterTag = el.dataset.tag;
-      setView('grid');
-      updateFilterUI();
-      renderNotes(); renderStats();
+  wrap.querySelectorAll('.dash-sum[data-nav]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const nv=el.dataset.nav;
+      if(nv==='today'){nav='all';filterPeriod='today';setView('list');updateFilterUI();renderNotes();renderStats();}
+      else if(nv==='month'){nav='all';filterPeriod='month';setView('list');updateFilterUI();renderNotes();renderStats();}
+      else if(nv==='starred'){goNav('starred');setView('list');}
+      else{goNav('all');setView('grid');}
     });
   });
+  wrap.querySelectorAll('.dash-cat[data-nav]').forEach(el=>{
+    el.addEventListener('click',()=>{const nv=el.dataset.nav;if(nv==='uncat'){goNav('uncat');setView('list');}else{goNav(nv);setView('grid');}});
+  });
+  wrap.querySelectorAll('.dash-act[data-note-id]').forEach(el=>{
+    el.addEventListener('click',()=>openDet(el.dataset.noteId));
+  });
+  wrap.querySelectorAll('.dash-tag[data-tag]').forEach(el=>{
+    el.addEventListener('click',()=>{filterTag=el.dataset.tag;goNav('all');setView('grid');updateFilterUI();renderNotes();renderStats();});
+  });
 }
+
 
 // ── 메모 렌더 ──
 function renderNotes() {
@@ -747,7 +658,29 @@ function renderNotes() {
   }
 
   wrap.className = `v${view}`;
-  const list = getFiltered();
+  const fullList = getFiltered();
+
+  // ── 페이지네이션 / 스크롤 처리
+  let list = fullList;
+  const pg = g('pagination');
+  if (perPage > 0 && scrollMode === 'page' && view !== 'kanban' && view !== 'timeline') {
+    const total   = fullList.length;
+    const maxPage = Math.max(1, Math.ceil(total / perPage));
+    curPage = Math.min(curPage, maxPage);
+    const start = (curPage - 1) * perPage;
+    list = fullList.slice(start, start + perPage);
+    if (pg) {
+      pg.classList.remove('hidden');
+      const info = g('pg-info');
+      if (info) info.textContent = `${curPage} / ${maxPage} 페이지`;
+      const prev = g('pg-prev'), next = g('pg-next');
+      if (prev) prev.disabled = curPage <= 1;
+      if (next) next.disabled = curPage >= maxPage;
+    }
+  } else {
+    if (pg) pg.classList.add('hidden');
+    curPage = 1;
+  }
 
   if (!list.length) {
     wrap.innerHTML = `<div class="empty">
@@ -787,7 +720,6 @@ function renderNotes() {
       const btn = e.target.closest('[data-btn]');
       if (btn) {
         const act = btn.dataset.btn;
-        if (act === 'star')    { toggleStar(id); return; }
         if (act === 'star')    { toggleStar(id); return; }
         if (act === 'edit')    { openEdit(id);  return; }
         if (act === 'trash')   { doTrash(id);   return; }
@@ -1282,7 +1214,7 @@ function openAdd() {
   renderTagPre();
   renderLinkRows();
   g('edit-ov').classList.add('on');
-  setTimeout(() => { initQuill(); setQuillContent(''); g('e-title').focus(); }, 80);
+  setTimeout(() => { initQuill(); setQuillContent(''); loadDraftIfExists(); startDraftTimer(); g('e-title').focus(); }, 80);
 }
 
 function openEdit(id) {
@@ -1305,6 +1237,7 @@ function openEdit(id) {
   setTimeout(() => {
     initQuill();
     setQuillContent(n.content || '');
+    startDraftTimer();
   }, 80);
 }
 
@@ -1317,6 +1250,8 @@ function closeEdit(force = false) {
     }
   }
   g('edit-ov').classList.remove('on');
+  stopDraftTimer();
+  clearDraft();
 }
 
 async function saveNote() {
@@ -1635,8 +1570,190 @@ function bindEvents() {
   const _eu=g('nav-uncat');   if(_eu)_eu.addEventListener('click',()=>goNav('uncat'));
   const _ed=g('nav-dash');    if(_ed)_ed.addEventListener('click',()=>{nav='all';setView('dash');renderTitle();renderChipBar();renderStats();});
 
+  // ── 설정 패널
+  const settingsBtn = g('settings-btn');
+  const settingsPanel = g('settings-panel');
+  const backupBtn = g('backup-btn');
+  const backupPanel = g('backup-panel');
+
+  if (settingsBtn) settingsBtn.addEventListener('click', () => {
+    settingsBtn.classList.toggle('on');
+    settingsPanel.classList.toggle('hidden');
+    if (backupPanel) backupPanel.classList.add('hidden');
+    if (backupBtn) backupBtn.classList.remove('on');
+  });
+  if (backupBtn) backupBtn.addEventListener('click', () => {
+    backupBtn.classList.toggle('on');
+    backupPanel.classList.toggle('hidden');
+    if (settingsPanel) settingsPanel.classList.add('hidden');
+    if (settingsBtn) settingsBtn.classList.remove('on');
+  });
+
+  // 페이지당 수
+  const spPerPage = g('sp-per-page');
+  if (spPerPage) {
+    spPerPage.value = String(perPage);
+    spPerPage.addEventListener('change', () => {
+      perPage = parseInt(spPerPage.value);
+      localStorage.setItem('cfg_perPage', perPage);
+      curPage = 1;
+      renderNotes(); renderStats();
+    });
+  }
+  // 스크롤/페이지 모드
+  const spScroll = g('sp-scroll'), spPage = g('sp-page');
+  function updateScrollModeUI() {
+    if (spScroll) spScroll.classList.toggle('on', scrollMode === 'scroll');
+    if (spPage)   spPage.classList.toggle('on',   scrollMode === 'page');
+  }
+  updateScrollModeUI();
+  if (spScroll) spScroll.addEventListener('click', () => {
+    scrollMode = 'scroll'; localStorage.setItem('cfg_scrollMode', scrollMode);
+    updateScrollModeUI(); curPage = 1; renderNotes();
+  });
+  if (spPage) spPage.addEventListener('click', () => {
+    scrollMode = 'page'; localStorage.setItem('cfg_scrollMode', scrollMode);
+    updateScrollModeUI(); curPage = 1; renderNotes();
+  });
+
+  // 페이지 이전/다음
+  const pgPrev = g('pg-prev'), pgNext = g('pg-next');
+  if (pgPrev) pgPrev.addEventListener('click', () => { curPage--; renderNotes(); window.scrollTo(0,0); });
+  if (pgNext) pgNext.addEventListener('click', () => { curPage++; renderNotes(); window.scrollTo(0,0); });
+
+  // ── 백업 내보내기
+  const exportBtn = g('export-btn');
+  if (exportBtn) exportBtn.addEventListener('click', exportData);
+
+  // ── 백업 불러오기
+  const importFile = g('import-file');
+  if (importFile) importFile.addEventListener('change', importData);
+
   // ── Quill 에디터 높이 드래그 리사이즈
   initQuillResize();
+}
+
+
+// ══════════════════════════════════════════════════════
+// 임시보관 (Draft)
+// ══════════════════════════════════════════════════════
+const DRAFT_KEY = 'memo_draft';
+let draftTimer  = null;
+
+function saveDraft() {
+  const title   = g('e-title')?.value || '';
+  const content = g('e-content')?.value || '';
+  if (!title && !content) return;
+  const draft = {
+    id:      editId,
+    title,
+    content,
+    catId:   g('e-cat')?.value || '',
+    savedAt: Date.now()
+  };
+  localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  const badge = g('draft-badge');
+  if (badge) badge.classList.remove('hidden');
+}
+
+function clearDraft() {
+  localStorage.removeItem(DRAFT_KEY);
+  const badge = g('draft-badge');
+  if (badge) badge.classList.add('hidden');
+}
+
+function loadDraftIfExists() {
+  const raw = localStorage.getItem(DRAFT_KEY);
+  if (!raw) return false;
+  try {
+    const draft = JSON.parse(raw);
+    const ago   = Math.round((Date.now() - draft.savedAt) / 60000);
+    const ok    = confirm(`${ago}분 전 임시저장된 글이 있습니다.\n제목: "${draft.title || '(없음')}"\n\n불러올까요?`);
+    if (!ok) { clearDraft(); return false; }
+    if (g('e-title')) g('e-title').value = draft.title || '';
+    if (draft.catId && g('e-cat')) g('e-cat').value = draft.catId;
+    setQuillContent(draft.content || '');
+    const badge = g('draft-badge');
+    if (badge) badge.classList.remove('hidden');
+    return true;
+  } catch { return false; }
+}
+
+function startDraftTimer() {
+  stopDraftTimer();
+  draftTimer = setInterval(saveDraft, 30000); // 30초마다 저장
+}
+
+function stopDraftTimer() {
+  if (draftTimer) { clearInterval(draftTimer); draftTimer = null; }
+}
+
+// ══════════════════════════════════════════════════════
+// 백업 / 복원
+// ══════════════════════════════════════════════════════
+function exportData() {
+  const data = {
+    version:    1,
+    exportedAt: new Date().toISOString(),
+    notes:      notes.map(n => ({ ...n })),
+    trashed:    trashed.map(n => ({ ...n })),
+    categories: cats.map(c => ({ ...c }))
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `memo_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('백업 파일이 다운로드되었습니다.', 'ok');
+}
+
+async function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = g('import-status');
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!data.notes || !Array.isArray(data.notes)) throw new Error('올바른 백업 파일이 아닙니다.');
+    const ok = confirm(`백업 파일에서 메모 ${data.notes.length}개, 카테고리 ${(data.categories||[]).length}개를 가져옵니다.\n\n기존 데이터와 병합됩니다. 계속할까요?`);
+    if (!ok) { e.target.value = ''; return; }
+    if (status) status.textContent = '가져오는 중...';
+    let added = 0;
+    // 메모 가져오기 (id 중복 제외)
+    const existIds = new Set(notes.map(n => n._id));
+    for (const n of data.notes) {
+      if (existIds.has(n._id)) continue;
+      const ref = doc(colNotes(), n._id);
+      await setDoc(ref, {
+        title:     n.title || '',
+        content:   n.content || '',
+        tags:      n.tags || [],
+        links:     n.links || [],
+        category:  n.category || '',
+        starred:   n.starred || false,
+        createdAt: n.createdAt || new Date().toISOString(),
+        updatedAt: n.updatedAt || new Date().toISOString(),
+      });
+      added++;
+    }
+    // 카테고리 가져오기
+    let catAdded = 0;
+    const existCatIds = new Set(cats.map(c => c._id));
+    for (const c of (data.categories || [])) {
+      if (existCatIds.has(c._id)) continue;
+      await setDoc(doc(colCats(), c._id), { name: c.name || '카테고리' });
+      catAdded++;
+    }
+    if (status) status.textContent = `완료! 메모 ${added}개, 카테고리 ${catAdded}개 추가됨`;
+    toast(`메모 ${added}개 가져오기 완료!`, 'ok');
+    await loadData();
+  } catch (err) {
+    if (status) status.textContent = '오류: ' + err.message;
+    toast('가져오기 실패: ' + err.message, 'err');
+  }
+  e.target.value = '';
 }
 
 function initQuillResize() {
