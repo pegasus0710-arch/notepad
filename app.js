@@ -41,7 +41,7 @@ let cats      = [];     // 카테고리 [{_id, name}]
 let trashDays = 30;
 
 let nav   = 'all';      // 'all' | 'trash' | 'cat:{id}'
-let view  = 'grid';     // 'grid'|'list'|'magazine'|'compact'|'timeline'|'kanban'|'dash'
+let view  = 'dash';     // 'grid'|'list'|'magazine'|'compact'|'timeline'|'kanban'|'dash'
 
 // ── 필터 상태
 let filterLink  = false;   // 링크있음 필터
@@ -211,6 +211,15 @@ async function createNote(data) {
   notes.push({ ...cleanData, deleted: false, _id: ref.id, createdAt: customDate || now, updatedAt: now });
 }
 
+
+async function toggleStar(id) {
+  const n = notes.find(x => x._id === id);
+  if (!n) return;
+  n.starred = !n.starred;
+  await setDoc(doc(colNotes(), id), { starred: n.starred }, { merge: true });
+  renderAll();
+}
+
 async function updateNote(id, data) {
   await setDoc(doc(colNotes(), id), { ...data, updatedAt: serverTimestamp() }, { merge: true });
   const i = notes.findIndex(n => n._id === id);
@@ -276,7 +285,8 @@ function fmt(d) {
   const dt = d instanceof Date ? d : new Date(d);
   if (isNaN(dt)) return '-';
   const p = n => String(n).padStart(2, '0');
-  return `${dt.getFullYear()}.${p(dt.getMonth()+1)}.${p(dt.getDate())} ${p(dt.getHours())}:${p(dt.getMinutes())}`;
+  const days=['일','월','화','수','목','금','토'];
+  return `${dt.getFullYear()}.${p(dt.getMonth()+1)}.${p(dt.getDate())}(${days[dt.getDay()]}) ${p(dt.getHours())}:${p(dt.getMinutes())}`;
 }
 
 function favicon(url) {
@@ -329,6 +339,8 @@ function getFiltered() {
     const cid = nav.slice(4);
     list = list.filter(n => n.category === cid);
   }
+  else if (!isT && nav === 'starred') { list = list.filter(n => n.starred); }
+  else if (!isT && nav === 'uncat')   { list = list.filter(n => !n.category || !cats.find(c=>c._id===n.category)); }
   if (q) {
     list = list.filter(n =>
       (n.title   || '').toLowerCase().includes(q) ||
@@ -369,6 +381,8 @@ function renderTitle() {
   const el = g('page-hd');
   if      (nav === 'all')             el.textContent = '📝 전체 메모';
   else if (nav === 'trash')           el.textContent = '🗑️ 휴지통';
+  else if (nav === 'starred')         el.textContent = '★ 즐겨찾기';
+  else if (nav === 'uncat')           el.textContent = '📂 카테고리 없음';
   else if (nav.startsWith('cat:')) {
     const c = catById(nav.slice(4));
     el.textContent = c ? `🗂️ ${c.name}` : '📝 메모';
@@ -385,6 +399,9 @@ function renderSidebar() {
   // 네비 active
   g('nav-all').classList.toggle('on', nav === 'all');
   g('nav-trash').classList.toggle('on', nav === 'trash');
+  const _ns=g('nav-starred'); if(_ns){_ns.classList.toggle('on',nav==='starred');const sc=g('cnt-starred');if(sc)sc.textContent=notes.filter(n=>n.starred).length;}
+  const _nu=g('nav-uncat');   if(_nu){_nu.classList.toggle('on',nav==='uncat');const uc=g('cnt-uncat');if(uc)uc.textContent=notes.filter(n=>!n.category||!cats.find(c=>c._id===n.category)).length;}
+  const _nd=g('nav-dash');    if(_nd)_nd.classList.toggle('on',view==='dash'&&nav==='all');
 
   // 휴지통 설정 패널
   g('trash-cfg').classList.toggle('hidden', nav !== 'trash');
@@ -770,6 +787,8 @@ function renderNotes() {
       const btn = e.target.closest('[data-btn]');
       if (btn) {
         const act = btn.dataset.btn;
+        if (act === 'star')    { toggleStar(id); return; }
+        if (act === 'star')    { toggleStar(id); return; }
         if (act === 'edit')    { openEdit(id);  return; }
         if (act === 'trash')   { doTrash(id);   return; }
         if (act === 'restore') { doRestore(id); return; }
@@ -803,8 +822,12 @@ function actBtns(id, isT) {
   if (isT) return `
     <button class="na grn" data-btn="restore">복원</button>
     <button class="na del" data-btn="hardel">완전삭제</button>`;
+  const n = notes.find(x=>x._id===id);
+  const sc = n?.starred ? 'na star on' : 'na star';
+  const si = n?.starred ? '★' : '☆';
   return `
-    <button class="na"     data-btn="edit">수정</button>
+    <button class="${sc}" data-btn="star" title="즐겨찾기">${si}</button>
+    <button class="na"   data-btn="edit">수정</button>
     <button class="na del" data-btn="trash">삭제</button>`;
 }
 
@@ -999,7 +1022,8 @@ function fmtShort(d) {
   const dt = d instanceof Date ? d : new Date(d);
   if (isNaN(dt)) return '-';
   const p = n => String(n).padStart(2,'0');
-  return `${dt.getFullYear()}.${p(dt.getMonth()+1)}.${p(dt.getDate())}`;
+  const days=['일','월','화','수','목','금','토'];
+  return `${dt.getFullYear()}.${p(dt.getMonth()+1)}.${p(dt.getDate())}(${days[dt.getDay()]})`;
 }
 
 function cardHtml(n, isT) {
@@ -1607,6 +1631,9 @@ function bindEvents() {
   // ── 대시보드 뷰 버튼
   const vbDash = g('vb-dash');
   if (vbDash) vbDash.addEventListener('click', () => setView('dash'));
+  const _es=g('nav-starred'); if(_es)_es.addEventListener('click',()=>goNav('starred'));
+  const _eu=g('nav-uncat');   if(_eu)_eu.addEventListener('click',()=>goNav('uncat'));
+  const _ed=g('nav-dash');    if(_ed)_ed.addEventListener('click',()=>{nav='all';setView('dash');renderTitle();renderChipBar();renderStats();});
 
   // ── Quill 에디터 높이 드래그 리사이즈
   initQuillResize();

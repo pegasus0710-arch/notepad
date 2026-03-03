@@ -233,6 +233,9 @@ a{text-decoration:none;}
 .nc:hover .nacts,.nm:hover .nacts{opacity:1;}
 .na{padding:3px 8px;border-radius:6px;border:1px solid transparent;background:transparent;color:var(--t3);font-size:11px;cursor:pointer;transition:.18s;}
 .na:hover{color:var(--t2);background:var(--bg3);border-color:var(--bd);}
+.na.star{font-size:13px;padding:2px 7px;}
+.na.star:hover{color:#ffd060;background:rgba(255,208,96,.1);border-color:rgba(255,208,96,.3);}
+.na.star.on{color:#ffd060;}
 .na.del:hover{color:var(--red);background:rgba(255,77,106,.08);border-color:rgba(255,77,106,.28);}
 .na.grn:hover{color:var(--green);background:rgba(0,200,150,.08);border-color:rgba(0,200,150,.28);}
 
@@ -579,6 +582,17 @@ input[type="datetime-local"].fc{color-scheme:dark;}
       <div class="nrow on" id="nav-all">
         <span class="ni">📝</span><span class="nlbl">전체 메모</span>
         <span class="ncnt" id="cnt-all">0</span>
+      </div>
+      <div class="nrow" id="nav-dash">
+        <span class="ni">📊</span><span class="nlbl">대시보드</span>
+      </div>
+      <div class="nrow" id="nav-starred">
+        <span class="ni">★</span><span class="nlbl">즐겨찾기</span>
+        <span class="ncnt" id="cnt-starred">0</span>
+      </div>
+      <div class="nrow" id="nav-uncat">
+        <span class="ni">📂</span><span class="nlbl">카테고리 없음</span>
+        <span class="ncnt" id="cnt-uncat">0</span>
       </div>
       <div class="nrow" id="nav-trash">
         <span class="ni">🗑️</span><span class="nlbl">휴지통</span>
