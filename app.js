@@ -559,87 +559,278 @@ function renderDash(wrap) {
   const total   = notes.length;
   const starred = notes.filter(n => n.starred).length;
   const uncat   = notes.filter(n => !n.category || !cats.find(c=>c._id===n.category)).length;
-  const DOT=['#3d7fff','#00c896','#ffd060','#a855f7','#06b6d4','#ec4899','#10b981','#f59e0b'];
-  const BG=['rgba(61,127,255,.09)','rgba(0,200,150,.09)','rgba(255,208,96,.09)',
-            'rgba(168,85,247,.09)','rgba(6,182,212,.09)','rgba(236,72,153,.09)',
-            'rgba(16,185,129,.09)','rgba(245,158,11,.09)'];
-  const now=new Date();
-  const thisM=notes.filter(n=>{const dd=n.createdAt?new Date(n.createdAt):null;return dd&&dd.getFullYear()===now.getFullYear()&&dd.getMonth()===now.getMonth();}).length;
-  const today=notes.filter(n=>{const dd=n.createdAt?new Date(n.createdAt):null;return dd&&dd.toDateString()===now.toDateString();}).length;
-  const tagMap={};
-  notes.forEach(n=>(n.tags||[]).forEach(t=>{tagMap[t]=(tagMap[t]||0)+1;}));
-  const topTags=Object.entries(tagMap).sort((a,b)=>b[1]-a[1]).slice(0,20);
-  const maxTC=topTags[0]?.[1]||1;
-  const heatMap={};
-  notes.forEach(n=>{if(!n.createdAt)return;const key=new Date(n.createdAt).toDateString();heatMap[key]=(heatMap[key]||0)+1;});
-  const heatCells=[];
-  for(let k=27;k>=0;k--){const dd=new Date(now);dd.setDate(now.getDate()-k);const cnt=heatMap[dd.toDateString()]||0;const lv=cnt===0?0:cnt===1?1:cnt<=3?2:cnt<=5?3:4;const lbl=`${dd.getMonth()+1}/${dd.getDate()}(${['일','월','화','수','목','금','토'][dd.getDay()]}) ${cnt}개`;heatCells.push(`<div class="heat-cell lv${lv}" title="${lbl}"></div>`);}
-  const catItems=cats.map((c,idx)=>{const ci=idx%8;const cnt=notes.filter(n=>n.category===c._id).length;const recent=notes.filter(n=>n.category===c._id).sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0))[0];return{c,ci,cnt,recent};});
-  const recent8=[...notes].sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0)).slice(0,8);
+  const DOT = ['#3d7fff','#00c896','#ffd060','#a855f7','#06b6d4','#ec4899','#10b981','#f59e0b'];
+  const now = new Date();
 
-  wrap.innerHTML=`
+  // ── 통계
+  const today = notes.filter(n => {
+    const dd = n.createdAt ? new Date(n.createdAt) : null;
+    return dd && dd.toDateString() === now.toDateString();
+  }).length;
+  const thisM = notes.filter(n => {
+    const dd = n.createdAt ? new Date(n.createdAt) : null;
+    return dd && dd.getFullYear()===now.getFullYear() && dd.getMonth()===now.getMonth();
+  }).length;
+  const lastM = notes.filter(n => {
+    const dd = n.createdAt ? new Date(n.createdAt) : null;
+    const lm  = new Date(now.getFullYear(), now.getMonth()-1, 1);
+    return dd && dd.getFullYear()===lm.getFullYear() && dd.getMonth()===lm.getMonth();
+  }).length;
+  const mDiff  = thisM - lastM;
+  const mTrend = mDiff > 0 ? '\u25b2'+mDiff : mDiff < 0 ? '\u25bc'+Math.abs(mDiff) : '\u2015';
+  const mColor = mDiff > 0 ? '#00c896' : mDiff < 0 ? '#ec4899' : 'var(--t3)';
+
+  // ── 태그 TOP 10
+  const tagMap = {};
+  notes.forEach(n => (n.tags||[]).forEach(t => { tagMap[t]=(tagMap[t]||0)+1; }));
+  const topTags = Object.entries(tagMap).sort((a,b)=>b[1]-a[1]).slice(0, 10);
+  const maxTC   = topTags[0]?.[1] || 1;
+  const totalTagCount = Object.keys(tagMap).length;
+
+  // ── 히트맵 28일 (4주×7요일)
+  const heatMap = {};
+  notes.forEach(n => {
+    if (!n.createdAt) return;
+    const key = new Date(n.createdAt).toDateString();
+    heatMap[key] = (heatMap[key]||0) + 1;
+  });
+  const WDAY = ['일','월','화','수','목','금','토'];
+  // 7행(요일) × 4열(주) 구성 — 최신이 오른쪽
+  const heatRows = [];
+  for (let row = 0; row < 7; row++) {
+    const cells = [];
+    for (let col = 0; col < 4; col++) {
+      const cd = new Date(now);
+      cd.setDate(now.getDate() - now.getDay() + row - (3 - col) * 7);
+      const cnt = heatMap[cd.toDateString()] || 0;
+      const lv  = cnt===0?0:cnt===1?1:cnt<=3?2:cnt<=6?3:4;
+      const lbl = (cd.getMonth()+1)+'/'+cd.getDate()+'('+WDAY[cd.getDay()]+') '+cnt+'\uac1c';
+      cells.push('<div class="hc2 lv'+lv+'" title="'+lbl+'"></div>');
+    }
+    heatRows.push({ day: WDAY[row], cells: cells, showLbl: row%2===0 });
+  }
+
+  // ── 카테고리
+  const catItems = cats.map((c, idx) => {
+    const ci  = idx % 8;
+    const cnt = notes.filter(n => n.category===c._id).length;
+    const pct = total ? Math.round(cnt/total*100) : 0;
+    const recents = notes.filter(n => n.category===c._id)
+      .sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0))
+      .slice(0,2);
+    return { c, ci, cnt, pct, recents };
+  });
+
+  // ── 최근 10개
+  const recent10 = [...notes]
+    .sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0))
+    .slice(0, 10);
+
+  // ── 월별 6개월 바
+  const mBars = [];
+  for (let m = 5; m >= 0; m--) {
+    const md = new Date(now.getFullYear(), now.getMonth()-m, 1);
+    const mc = notes.filter(n=>{
+      const dd=n.createdAt?new Date(n.createdAt):null;
+      return dd&&dd.getFullYear()===md.getFullYear()&&dd.getMonth()===md.getMonth();
+    }).length;
+    mBars.push({ lbl:(md.getMonth()+1)+'\uc6d4', cnt:mc, cur:m===0 });
+  }
+  const maxBar = Math.max(...mBars.map(m=>m.cnt), 1);
+
+  wrap.innerHTML = `
   <div class="dash-grid">
+
+    <!-- 요약 카드 -->
     <div class="dash-summaries">
-      <div class="dash-sum" data-nav="all"><div class="dash-sum-icon" style="background:rgba(61,127,255,.15);color:#3d7fff">📝</div><div class="dash-sum-info"><div class="dash-sum-num">${total}</div><div class="dash-sum-lbl">전체 메모</div></div></div>
-      <div class="dash-sum" data-nav="today"><div class="dash-sum-icon" style="background:rgba(0,200,150,.15);color:#00c896">🌟</div><div class="dash-sum-info"><div class="dash-sum-num">${today}</div><div class="dash-sum-lbl">오늘 작성</div></div></div>
-      <div class="dash-sum" data-nav="month"><div class="dash-sum-icon" style="background:rgba(255,208,96,.15);color:#ffd060">📅</div><div class="dash-sum-info"><div class="dash-sum-num">${thisM}</div><div class="dash-sum-lbl">이번달 작성</div></div></div>
-      <div class="dash-sum" data-nav="starred"><div class="dash-sum-icon" style="background:rgba(168,85,247,.15);color:#a855f7">★</div><div class="dash-sum-info"><div class="dash-sum-num">${starred}</div><div class="dash-sum-lbl">즐겨찾기</div></div></div>
-    </div>
-    <div class="dash-section">
-      <div class="dash-sec-hd"><span class="dash-sec-title">📂 카테고리</span><span class="dash-sec-sub">${cats.length}개</span></div>
-      <div class="dash-cats">
-        ${catItems.map(({c,ci,cnt,recent})=>`
-          <div class="dash-cat" data-nav="cat:${esc(c._id)}" style="background:${BG[ci]}">
-            <div class="dash-cat-accent" style="background:${DOT[ci]}"></div>
-            <div class="dash-cat-top"><span class="dash-cat-name">${esc(c.name)}</span><span class="dash-cat-cnt" style="color:${DOT[ci]}">${cnt}</span></div>
-            <div class="dash-cat-bar-wrap"><div class="dash-cat-bar-fill" style="width:${total?Math.round(cnt/total*100):0}%;background:${DOT[ci]}"></div></div>
-            <div class="dash-cat-recent">${recent?esc((recent.title||'제목없음').slice(0,28)):'메모 없음'}</div>
-          </div>`).join('')}
-        ${uncat>0?`<div class="dash-cat" data-nav="uncat" style="background:rgba(90,110,154,.08)">
-          <div class="dash-cat-accent" style="background:var(--t3)"></div>
-          <div class="dash-cat-top"><span class="dash-cat-name">미분류</span><span class="dash-cat-cnt" style="color:var(--t3)">${uncat}</span></div>
-          <div class="dash-cat-bar-wrap"><div class="dash-cat-bar-fill" style="width:${total?Math.round(uncat/total*100):0}%;background:var(--t3)"></div></div>
-          <div class="dash-cat-recent">카테고리 없는 메모</div></div>`:''}
-      </div>
-    </div>
-    <div class="dash-bottom">
-      <div class="dash-section">
-        <div class="dash-sec-hd"><span class="dash-sec-title">🕐 최근 활동</span></div>
-        <div class="dash-recent">
-          ${recent8.map(n=>{const ci=catColorIdx(n.category);const col=ci>=0?DOT[ci]:'var(--t3)';const cat=catLabel(n.category);return`<div class="dash-act" data-note-id="${n._id}"><span class="dash-act-dot" style="background:${col}"></span><div class="dash-act-body"><span class="dash-act-title">${esc((n.title||'제목없음').slice(0,30))}</span><span class="dash-act-meta">${cat!=='카테고리없음'?esc(cat)+' · ':''}${fmtShort(n.updatedAt||n.createdAt)}</span></div></div>`;}).join('')}
+      <div class="dash-sum" data-nav="all">
+        <div class="ds-bar" style="background:#3d7fff"></div>
+        <div class="ds-icon" style="background:rgba(61,127,255,.14);color:#3d7fff">📝</div>
+        <div class="ds-body">
+          <div class="ds-num">${total}</div>
+          <div class="ds-lbl">전체 메모</div>
+          <div class="ds-sub">${cats.length}개 카테고리</div>
         </div>
       </div>
-      <div class="dash-section">
-        <div class="dash-sec-hd"><span class="dash-sec-title">📊 최근 28일 활동</span></div>
-        <div class="dash-heatmap">${heatCells.join('')}</div>
-        <div class="dash-heat-legend"><span>없음</span><div class="heat-cell lv0"></div><div class="heat-cell lv1"></div><div class="heat-cell lv2"></div><div class="heat-cell lv3"></div><div class="heat-cell lv4"></div><span>많음</span></div>
+      <div class="dash-sum ${today===0?'ds-dim':''}" data-nav="today">
+        <div class="ds-bar" style="background:#00c896"></div>
+        <div class="ds-icon" style="background:rgba(0,200,150,.14);color:#00c896">✍️</div>
+        <div class="ds-body">
+          <div class="ds-num">${today}</div>
+          <div class="ds-lbl">오늘 작성</div>
+          <div class="ds-sub">${today===0?'아직 없음':'오늘도 수고!'}</div>
+        </div>
       </div>
+      <div class="dash-sum" data-nav="month">
+        <div class="ds-bar" style="background:#ffd060"></div>
+        <div class="ds-icon" style="background:rgba(255,208,96,.14);color:#ffd060">📅</div>
+        <div class="ds-body">
+          <div class="ds-num">${thisM}</div>
+          <div class="ds-lbl">이번달 작성</div>
+          <div class="ds-sub" style="color:${mColor}">${mTrend} 지난달 ${lastM}개</div>
+        </div>
+      </div>
+      <div class="dash-sum ${starred===0?'ds-dim':''}" data-nav="starred">
+        <div class="ds-bar" style="background:#a855f7"></div>
+        <div class="ds-icon" style="background:rgba(168,85,247,.14);color:#a855f7">★</div>
+        <div class="ds-body">
+          <div class="ds-num">${starred}</div>
+          <div class="ds-lbl">즐겨찾기</div>
+          <div class="ds-sub">${starred===0?'없음':'클릭하여 보기'}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 카테고리 2행 그리드 -->
+    <div class="dash-section">
+      <div class="dash-sec-hd">
+        <span class="dash-sec-title">📂 카테고리별 현황</span>
+        <span class="dash-sec-sub">${cats.length}개 카테고리 · 전체 ${total}개</span>
+      </div>
+      <div class="dc2-grid">
+        ${catItems.map(({c,ci,cnt,pct,recents})=>`
+          <div class="dc2" data-nav="cat:${esc(c._id)}">
+            <div class="dc2-side" style="background:${DOT[ci]}"></div>
+            <div class="dc2-body">
+              <div class="dc2-top">
+                <span class="dc2-name">${esc(c.name)}</span>
+                <span class="dc2-cnt" style="color:${DOT[ci]}">${cnt}개</span>
+              </div>
+              <div class="dc2-barrow">
+                <div class="dc2-bar" style="width:${pct}%;background:${DOT[ci]}"></div>
+                <span class="dc2-pct">${pct}%</span>
+              </div>
+              <div class="dc2-memos">
+                ${recents.map(r=>`<div class="dc2-memo">📄 ${esc((r.title||'제목없음').slice(0,28))}</div>`).join('')}
+                ${recents.length===0?'<div class="dc2-memo dc2-empty">메모 없음</div>':''}
+              </div>
+            </div>
+          </div>`).join('')}
+        ${uncat>0?`
+          <div class="dc2" data-nav="uncat">
+            <div class="dc2-side" style="background:var(--t3)"></div>
+            <div class="dc2-body">
+              <div class="dc2-top">
+                <span class="dc2-name">미분류</span>
+                <span class="dc2-cnt" style="color:var(--t3)">${uncat}개</span>
+              </div>
+              <div class="dc2-barrow">
+                <div class="dc2-bar" style="width:${total?Math.round(uncat/total*100):0}%;background:var(--t3)"></div>
+                <span class="dc2-pct">${total?Math.round(uncat/total*100):0}%</span>
+              </div>
+              <div class="dc2-memos"><div class="dc2-memo dc2-empty">카테고리 없는 메모</div></div>
+            </div>
+          </div>`:``}
+      </div>
+    </div>
+
+    <!-- 하단 3열 -->
+    <div class="db3">
+
+      <!-- 최근 활동 -->
       <div class="dash-section">
-        <div class="dash-sec-hd"><span class="dash-sec-title">🏷 태그 클라우드</span><span class="dash-sec-sub">${topTags.length}개</span></div>
-        <div class="dash-tagcloud">
-          ${topTags.map(([tag,cnt])=>{const r=cnt/maxTC;const sz=10+Math.round(r*14);const op=0.5+r*0.5;return`<span class="dash-tag" data-tag="${esc(tag)}" style="font-size:${sz}px;opacity:${op}">#${esc(tag)} <sup>${cnt}</sup></span>`;}).join('')}
+        <div class="dash-sec-hd"><span class="dash-sec-title">🕐 최근 활동</span></div>
+        <div class="dact-list">
+          ${recent10.map(n=>{
+            const ci=catColorIdx(n.category);
+            const col=ci>=0?DOT[ci]:'var(--t3)';
+            const cat=catLabel(n.category);
+            return `<div class="dact" data-note-id="${n._id}">
+              <div class="dact-dot" style="background:${col}"></div>
+              <div class="dact-body">
+                <div class="dact-title">${esc((n.title||'제목없음').slice(0,28))}</div>
+                <div class="dact-meta">
+                  ${cat!=='카테고리없음'?`<span style="color:${col};font-weight:600">${esc(cat)}</span> ·`:``}
+                  ${fmtShort(n.updatedAt||n.createdAt)}
+                </div>
+              </div>
+              ${n.starred?'<span style="color:#ffd060;font-size:11px;flex-shrink:0">★</span>':''}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- 통계: 월별바 + 히트맵 -->
+      <div class="dash-section">
+        <div class="dash-sec-hd"><span class="dash-sec-title">📊 작성 통계</span></div>
+        <div class="dmbar">
+          ${mBars.map(m=>`
+            <div class="dmbar-col">
+              <div class="dmbar-wrap">
+                <div class="dmbar-fill ${m.cur?'cur':''}" style="height:${m.cnt?Math.max(6,Math.round(m.cnt/maxBar*72)):2}px"></div>
+              </div>
+              <div class="dmbar-cnt">${m.cnt}</div>
+              <div class="dmbar-lbl">${m.lbl}</div>
+            </div>`).join('')}
+        </div>
+        <div class="dheat-title">최근 4주 활동</div>
+        <div class="dheat-wrap">
+          <div class="dheat-labels">
+            ${heatRows.map(r=>`<div class="dheat-lbl">${r.showLbl?r.day:''}</div>`).join('')}
+          </div>
+          <div class="dheat-cols">
+            ${heatRows.map(r=>`<div class="dheat-row">${r.cells.join('')}</div>`).join('')}
+          </div>
+        </div>
+        <div class="dheat-legend">
+          <span>적음</span>
+          <div class="hc2 lv0"></div><div class="hc2 lv1"></div>
+          <div class="hc2 lv2"></div><div class="hc2 lv3"></div><div class="hc2 lv4"></div>
+          <span>많음</span>
+        </div>
+      </div>
+
+      <!-- 태그 TOP 10 -->
+      <div class="dash-section">
+        <div class="dash-sec-hd">
+          <span class="dash-sec-title">🏷 인기 태그 TOP 10</span>
+          <span class="dash-sec-sub">전체 ${totalTagCount}개</span>
+        </div>
+        <div class="dtags">
+          ${topTags.length===0?'<div style="color:var(--t3);font-size:12px">태그 없음</div>':''}
+          ${topTags.map(([tag,cnt],rank)=>{
+            const cols=['#3d7fff','#00c896','#ffd060','#a855f7','#06b6d4','#ec4899','#10b981','#f59e0b','#3d7fff','#00c896'];
+            const col=cols[rank];
+            const bar=Math.round(cnt/maxTC*100);
+            return `<div class="dtag-row" data-tag="${esc(tag)}">
+              <div class="dtag-rank">${rank+1}</div>
+              <div class="dtag-body">
+                <div class="dtag-hd">
+                  <span class="dtag-name">#${esc(tag)}</span>
+                  <span class="dtag-cnt">${cnt}개</span>
+                </div>
+                <div class="dtag-bar-wrap">
+                  <div class="dtag-bar" style="width:${bar}%;background:${col}"></div>
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
         </div>
       </div>
     </div>
   </div>`;
 
+  // ── 이벤트
   wrap.querySelectorAll('.dash-sum[data-nav]').forEach(el=>{
     el.addEventListener('click',()=>{
       const nv=el.dataset.nav;
       if(nv==='today'){nav='all';filterPeriod='today';setView('list');updateFilterUI();renderNotes();renderStats();}
       else if(nv==='month'){nav='all';filterPeriod='month';setView('list');updateFilterUI();renderNotes();renderStats();}
-      else if(nv==='starred'){goNav('starred');setView('list');}
-      else{goNav('all');setView('grid');}
+      else if(nv==='starred'){goNav('starred');}
+      else{goNav('all');}
     });
   });
-  wrap.querySelectorAll('.dash-cat[data-nav]').forEach(el=>{
-    el.addEventListener('click',()=>{const nv=el.dataset.nav;if(nv==='uncat'){goNav('uncat');setView('list');}else{goNav(nv);setView('grid');}});
+  wrap.querySelectorAll('.dc2[data-nav]').forEach(el=>{
+    el.addEventListener('click',()=>goNav(el.dataset.nav));
   });
-  wrap.querySelectorAll('.dash-act[data-note-id]').forEach(el=>{
+  wrap.querySelectorAll('.dact[data-note-id]').forEach(el=>{
     el.addEventListener('click',()=>openDet(el.dataset.noteId));
   });
-  wrap.querySelectorAll('.dash-tag[data-tag]').forEach(el=>{
-    el.addEventListener('click',()=>{filterTag=el.dataset.tag;goNav('all');setView('grid');updateFilterUI();renderNotes();renderStats();});
+  wrap.querySelectorAll('.dtag-row[data-tag]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      filterTag=el.dataset.tag;
+      goNav('all');setView('grid');updateFilterUI();renderNotes();renderStats();
+    });
   });
 }
 
