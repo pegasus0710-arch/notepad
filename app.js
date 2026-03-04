@@ -1914,8 +1914,13 @@ function initQuillResize() {
 // 인증 상태 감지 → 진입점
 // ══════════════════════════════════════════════════════
 // 리디렉션 로그인 결과 처리
-getRedirectResult(auth).catch(err => {
-  if (err) console.error('redirect login error:', err.message);
+getRedirectResult(auth).then(result => {
+  if (result?.user) console.log('redirect success:', result.user.email);
+}).catch(err => {
+  console.error('redirect error:', err.code, err.message);
+  if (err.code && err.code !== 'auth/no-auth-event') {
+    alert('로그인 오류 (' + err.code + '):\n' + err.message);
+  }
 });
 
 onAuthStateChanged(auth, async (user) => {
