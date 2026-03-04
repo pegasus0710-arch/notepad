@@ -489,10 +489,7 @@ input[type="datetime-local"].fc{color-scheme:dark;}
 @media(max-width:1100px){.dash-summaries{grid-template-columns:repeat(3,1fr);}.dash-bottom{grid-template-columns:1fr 1fr;}}
 @media(max-width:700px){.dash-summaries{grid-template-columns:repeat(2,1fr);}.dash-bottom{grid-template-columns:1fr;}.vdash{padding:12px;}}
 
-.sp-num{width:90px;padding:6px 10px;background:var(--bg3);border:1px solid var(--bd);border-radius:8px;color:var(--t);font-size:13px;outline:none;text-align:center;}
-.sp-num:focus{border-color:var(--acc);}
-.sp-num::-webkit-inner-spin-button,.sp-num::-webkit-outer-spin-button{opacity:.4;}
-
+.hidden{display:none!important;}
 .pagination{display:flex;align-items:center;justify-content:center;gap:12px;padding:16px;}
 .pg-btn{padding:6px 16px;background:var(--card);border:1px solid var(--bd);border-radius:8px;color:var(--t2);font-size:12px;cursor:pointer;transition:.18s;}
 .pg-btn:hover:not(:disabled){border-color:var(--acc);color:var(--acc2);}
@@ -624,7 +621,9 @@ input[type="datetime-local"].fc{color-scheme:dark;}
         <button class="vbtn" id="vb-kanban" title="칸반">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="1" y="1" width="3.5" height="9" rx="1"/><rect x="5.25" y="1" width="3.5" height="6" rx="1"/><rect x="9.5" y="1" width="3.5" height="11" rx="1"/></svg>
         </button>
-
+        <button class="vbtn" id="vb-dash" title="대시보드">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="1" y="1" width="5" height="7" rx="1"/><rect x="8" y="1" width="5" height="4" rx="1"/><rect x="1" y="10" width="5" height="3" rx="1"/><rect x="8" y="7" width="5" height="6" rx="1"/></svg>
+        </button>
       </div>
       <div class="tl-grp-btn hidden" id="tl-grp-wrap">
         <button class="on" id="tl-grp-day"   title="일별">일</button>
@@ -647,8 +646,15 @@ input[type="datetime-local"].fc{color-scheme:dark;}
     </div>
     <div class="settings-panel hidden" id="settings-panel">
       <div class="sp-row">
-        <span class="sp-lbl">페이지당 메모 수<br><small style="color:var(--t3);font-weight:400">0 입력 시 전체 표시</small></span>
-        <input class="sp-num" id="sp-per-page" type="number" min="0" max="500" step="1" placeholder="0 = 전체">
+        <span class="sp-lbl">페이지당 메모 수</span>
+        <select class="sp-sel" id="sp-per-page">
+          <option value="0">전체 (무한 스크롤)</option>
+          <option value="10">10개</option>
+          <option value="20" selected>20개</option>
+          <option value="30">30개</option>
+          <option value="50">50개</option>
+          <option value="100">100개</option>
+        </select>
       </div>
       <div class="sp-row">
         <span class="sp-lbl">보기 방식</span>
@@ -660,15 +666,11 @@ input[type="datetime-local"].fc{color-scheme:dark;}
     </div>
     <div class="settings-panel hidden" id="backup-panel">
       <div class="sp-row">
-        <span class="sp-lbl">내보내기</span>
-        <div style="display:flex;gap:5px;flex-wrap:wrap">
-          <button class="sp-act" id="export-btn">JSON</button>
-          <button class="sp-act" id="export-csv-btn">CSV</button>
-          <button class="sp-act" id="export-md-btn">Markdown</button>
-        </div>
+        <span class="sp-lbl">JSON 백업</span>
+        <button class="sp-act" id="export-btn">전체 내보내기</button>
       </div>
       <div class="sp-row">
-        <span class="sp-lbl">복원 (JSON)<br><small style="color:var(--t3);font-weight:400">기존 데이터와 병합됩니다</small></span>
+        <span class="sp-lbl">JSON 복원</span>
         <label class="sp-act" for="import-file">파일 선택</label>
         <input type="file" id="import-file" accept=".json" style="display:none">
       </div>

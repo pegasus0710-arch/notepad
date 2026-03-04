@@ -10,8 +10,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 import {
   getAuth, GoogleAuthProvider,
-  signInWithPopup, signInWithRedirect, getRedirectResult,
-  signOut, onAuthStateChanged
+  signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
 // ══════════════════════════════════════════════════════
@@ -1472,9 +1471,11 @@ function closeDet() { g('det-ov').classList.remove('on'); }
 // ══════════════════════════════════════════════════════
 async function googleLogin() {
   try {
-    await signInWithRedirect(auth, provider);
+    await signInWithPopup(auth, provider);
   } catch (err) {
-    alert('로그인 실패: ' + err.message);
+    if (err.code !== 'auth/popup-closed-by-user') {
+      alert('로그인 실패: ' + err.message);
+    }
   }
 }
 
@@ -1586,6 +1587,9 @@ function bindEvents() {
   const chipClear = g('chip-clear');
   if (chipClear) chipClear.addEventListener('click', clearFilters);
 
+  // ── 대시보드 뷰 버튼
+  const vbDash = g('vb-dash');
+  if (vbDash) vbDash.addEventListener('click', () => setView('dash'));
   const _es=g('nav-starred'); if(_es)_es.addEventListener('click',()=>goNav('starred'));
   const _eu=g('nav-uncat');   if(_eu)_eu.addEventListener('click',()=>goNav('uncat'));
   const _ed=g('nav-dash');    if(_ed)_ed.addEventListener('click',()=>{nav='all';setView('dash');renderTitle();renderChipBar();renderStats();});
@@ -1609,26 +1613,12 @@ function bindEvents() {
     if (settingsBtn) settingsBtn.classList.remove('on');
   });
 
-  // 페이지당 수 (number input)
+  // 페이지당 수
   const spPerPage = g('sp-per-page');
   if (spPerPage) {
     spPerPage.value = String(perPage);
-    let _ppTimer = null;
-    spPerPage.addEventListener('input', () => {
-      clearTimeout(_ppTimer);
-      _ppTimer = setTimeout(() => {
-        const v = parseInt(spPerPage.value);
-        if (isNaN(v) || v < 0) return;
-        perPage = v;
-        localStorage.setItem('cfg_perPage', perPage);
-        curPage = 1;
-        renderNotes(); renderStats();
-      }, 600);
-    });
     spPerPage.addEventListener('change', () => {
-      const v = parseInt(spPerPage.value);
-      if (isNaN(v) || v < 0) { spPerPage.value = String(perPage); return; }
-      perPage = v;
+      perPage = parseInt(spPerPage.value);
       localStorage.setItem('cfg_perPage', perPage);
       curPage = 1;
       renderNotes(); renderStats();
@@ -1658,10 +1648,6 @@ function bindEvents() {
   // ── 백업 내보내기
   const exportBtn = g('export-btn');
   if (exportBtn) exportBtn.addEventListener('click', exportData);
-  const exportCsvBtn = g('export-csv-btn');
-  if (exportCsvBtn) exportCsvBtn.addEventListener('click', exportCsv);
-  const exportMdBtn = g('export-md-btn');
-  if (exportMdBtn) exportMdBtn.addEventListener('click', exportMarkdown);
 
   // ── 백업 불러오기
   const importFile = g('import-file');
@@ -1744,62 +1730,7 @@ function exportData() {
   a.download = `memo_backup_${new Date().toISOString().slice(0,10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
-  toast('JSON 백업 파일이 다운로드되었습니다.', 'ok');
-}
-
-function exportCsv() {
-  const header = ['제목','내용','카테고리','태그','링크','즐겨찾기','작성일','수정일'];
-  const rows = notes.map(n => [
-    n.title || '',
-    stripHtml(n.content || '').replace(/\n/g,' '),
-    catLabel(n.category),
-    (n.tags||[]).join(' '),
-    (n.links||[]).filter(l=>l?.url).map(l=>l.url).join(' '),
-    n.starred ? '★' : '',
-    n.createdAt ? new Date(n.createdAt).toISOString().slice(0,16) : '',
-    n.updatedAt ? new Date(n.updatedAt).toISOString().slice(0,16) : '',
-  ]);
-  const csv = [header, ...rows].map(r =>
-    r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')
-  ).join('\n');
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url;
-  a.download = `memo_backup_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-  toast('CSV 파일이 다운로드되었습니다.', 'ok');
-}
-
-function exportMarkdown() {
-  let md = `# 메모 백업\n> 내보낸 날짜: ${new Date().toLocaleString('ko-KR')}\n> 총 ${notes.length}개\n\n---\n\n`;
-  const sorted = [...notes].sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
-  sorted.forEach((n, i) => {
-    md += `## ${i+1}. ${n.title || '제목 없음'}\n\n`;
-    md += `- **카테고리**: ${catLabel(n.category)}\n`;
-    if (n.starred) md += `- **즐겨찾기**: ★\n`;
-    md += `- **작성일**: ${n.createdAt ? new Date(n.createdAt).toLocaleString('ko-KR') : '-'}\n`;
-    if ((n.tags||[]).length) md += `- **태그**: ${n.tags.map(t=>`#${t}`).join(' ')}\n`;
-    if ((n.links||[]).some(l=>l?.url)) {
-      md += `- **링크**:\n`;
-      (n.links||[]).filter(l=>l?.url).forEach(l => {
-        md += `  - [${l.label||l.url}](${l.url})\n`;
-      });
-    }
-    md += `\n`;
-    const body = isRich(n.content) ? stripHtml(n.content) : (n.content||'');
-    if (body.trim()) md += body.trim() + '\n';
-    md += `\n---\n\n`;
-  });
-  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url;
-  a.download = `memo_backup_${new Date().toISOString().slice(0,10)}.md`;
-  a.click();
-  URL.revokeObjectURL(url);
-  toast('Markdown 파일이 다운로드되었습니다.', 'ok');
+  toast('백업 파일이 다운로드되었습니다.', 'ok');
 }
 
 async function importData(e) {
@@ -1913,16 +1844,6 @@ function initQuillResize() {
 // ══════════════════════════════════════════════════════
 // 인증 상태 감지 → 진입점
 // ══════════════════════════════════════════════════════
-// 리디렉션 로그인 결과 처리
-getRedirectResult(auth).then(result => {
-  if (result?.user) console.log('redirect success:', result.user.email);
-}).catch(err => {
-  console.error('redirect error:', err.code, err.message);
-  if (err.code && err.code !== 'auth/no-auth-event') {
-    alert('로그인 오류 (' + err.code + '):\n' + err.message);
-  }
-});
-
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     me = user;
