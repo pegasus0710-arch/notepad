@@ -1045,6 +1045,8 @@ async function doHardDel(id) {
 
 function goNav(target) {
   nav = target;
+  // 대시보드 뷰에서 특정 카테고리/즐겨찾기/미분류로 이동 시 → grid로 전환
+  if (view === 'dash') setView('grid');
   renderTitle();
   renderAll();
   if (window.innerWidth <= 768) closeMobileSb();
@@ -1076,7 +1078,7 @@ function closeMobileSb() {
 // ══════════════════════════════════════════════════════
 function setView(mode) {
   view = mode;
-  ['grid', 'list', 'magazine', 'compact', 'timeline', 'kanban', 'dash'].forEach(m => {
+  ['grid', 'list', 'magazine', 'compact', 'timeline', 'kanban'].forEach(m => {
     const btn = g(`vb-${m}`);
     if (btn) btn.classList.toggle('on', m === mode);
   });
@@ -1623,9 +1625,7 @@ function bindEvents() {
   const chipClear = g('chip-clear');
   if (chipClear) chipClear.addEventListener('click', clearFilters);
 
-  // ── 대시보드 뷰 버튼
-  const vbDash = g('vb-dash');
-  if (vbDash) vbDash.addEventListener('click', () => setView('dash'));
+  // ── 대시보드는 사이드바 nav-dash 버튼으로만 접근
   const _es=g('nav-starred'); if(_es)_es.addEventListener('click',()=>goNav('starred'));
   const _eu=g('nav-uncat');   if(_eu)_eu.addEventListener('click',()=>goNav('uncat'));
   const _ed=g('nav-dash');    if(_ed)_ed.addEventListener('click',()=>{nav='all';setView('dash');renderTitle();renderChipBar();renderStats();});
