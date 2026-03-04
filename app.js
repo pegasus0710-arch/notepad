@@ -560,85 +560,65 @@ function renderDash(wrap) {
   const starred = notes.filter(n => n.starred).length;
   const uncat   = notes.filter(n => !n.category || !cats.find(c=>c._id===n.category)).length;
   const DOT=['#3d7fff','#00c896','#ffd060','#a855f7','#06b6d4','#ec4899','#10b981','#f59e0b'];
-  const BG=['rgba(61,127,255,.12)','rgba(0,200,150,.12)','rgba(255,208,96,.12)',
-            'rgba(168,85,247,.12)','rgba(6,182,212,.12)','rgba(236,72,153,.12)',
-            'rgba(16,185,129,.12)','rgba(245,158,11,.12)'];
-  const now = new Date();
-  const today = notes.filter(n => { const dd=n.createdAt?new Date(n.createdAt):null; return dd&&dd.toDateString()===now.toDateString(); }).length;
-  const thisW = notes.filter(n => { const dd=n.createdAt?new Date(n.createdAt):null; return dd&&(now-dd)<=7*864e5; }).length;
-  const thisM = notes.filter(n => { const dd=n.createdAt?new Date(n.createdAt):null; return dd&&dd.getFullYear()===now.getFullYear()&&dd.getMonth()===now.getMonth(); }).length;
-  // 연속 작성일
-  let streak = 0;
-  const daySet = new Set(notes.map(n => n.createdAt ? new Date(n.createdAt).toDateString() : '').filter(Boolean));
-  for (let k=0; k<365; k++) { const dd=new Date(now); dd.setDate(now.getDate()-k); if(daySet.has(dd.toDateString())) streak++; else if(k>0) break; }
-  // 태그
-  const tagMap = {};
-  notes.forEach(n => (n.tags||[]).forEach(t => { tagMap[t]=(tagMap[t]||0)+1; }));
-  const topTags = Object.entries(tagMap).sort((a,b)=>b[1]-a[1]).slice(0,24);
-  const maxTC   = topTags[0]?.[1] || 1;
-  // 56일 히트맵
-  const heatMap = {};
-  notes.forEach(n => { if(!n.createdAt) return; const key=new Date(n.createdAt).toDateString(); heatMap[key]=(heatMap[key]||0)+1; });
-  const heatCells = [];
-  for (let k=55; k>=0; k--) { const dd=new Date(now); dd.setDate(now.getDate()-k); const cnt=heatMap[dd.toDateString()]||0; const lv=cnt===0?0:cnt===1?1:cnt<=3?2:cnt<=6?3:4; heatCells.push({lv, lbl:`${dd.getMonth()+1}/${dd.getDate()} ${cnt}개`}); }
-  // 카테고리
-  const catItems = cats.map((c,idx) => {
-    const ci=idx%8; const cnt=notes.filter(n=>n.category===c._id).length;
-    const wCnt=notes.filter(n=>n.category===c._id&&(now-new Date(n.createdAt||0))<=7*864e5).length;
-    const recent=notes.filter(n=>n.category===c._id).sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0))[0];
-    return {c,ci,cnt,wCnt,recent,pct:total?Math.round(cnt/total*100):0};
-  }).sort((a,b)=>b.cnt-a.cnt);
-  // 최근 10개
-  const recent10=[...notes].sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0)).slice(0,10);
-  // 이번달 카테고리별
-  const catMonthly=cats.map((c,idx)=>({name:c.name,cnt:notes.filter(n=>n.category===c._id&&new Date(n.createdAt||0).getMonth()===now.getMonth()).length,ci:idx%8})).filter(x=>x.cnt>0).sort((a,b)=>b.cnt-a.cnt).slice(0,5);
+  const BG=['rgba(61,127,255,.09)','rgba(0,200,150,.09)','rgba(255,208,96,.09)',
+            'rgba(168,85,247,.09)','rgba(6,182,212,.09)','rgba(236,72,153,.09)',
+            'rgba(16,185,129,.09)','rgba(245,158,11,.09)'];
+  const now=new Date();
+  const thisM=notes.filter(n=>{const dd=n.createdAt?new Date(n.createdAt):null;return dd&&dd.getFullYear()===now.getFullYear()&&dd.getMonth()===now.getMonth();}).length;
+  const today=notes.filter(n=>{const dd=n.createdAt?new Date(n.createdAt):null;return dd&&dd.toDateString()===now.toDateString();}).length;
+  const tagMap={};
+  notes.forEach(n=>(n.tags||[]).forEach(t=>{tagMap[t]=(tagMap[t]||0)+1;}));
+  const topTags=Object.entries(tagMap).sort((a,b)=>b[1]-a[1]).slice(0,20);
+  const maxTC=topTags[0]?.[1]||1;
+  const heatMap={};
+  notes.forEach(n=>{if(!n.createdAt)return;const key=new Date(n.createdAt).toDateString();heatMap[key]=(heatMap[key]||0)+1;});
+  const heatCells=[];
+  for(let k=27;k>=0;k--){const dd=new Date(now);dd.setDate(now.getDate()-k);const cnt=heatMap[dd.toDateString()]||0;const lv=cnt===0?0:cnt===1?1:cnt<=3?2:cnt<=5?3:4;const lbl=`${dd.getMonth()+1}/${dd.getDate()}(${['일','월','화','수','목','금','토'][dd.getDay()]}) ${cnt}개`;heatCells.push(`<div class="heat-cell lv${lv}" title="${lbl}"></div>`);}
+  const catItems=cats.map((c,idx)=>{const ci=idx%8;const cnt=notes.filter(n=>n.category===c._id).length;const recent=notes.filter(n=>n.category===c._id).sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0))[0];return{c,ci,cnt,recent};});
+  const recent8=[...notes].sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0)).slice(0,8);
 
   wrap.innerHTML=`
   <div class="dash-grid">
     <div class="dash-summaries">
-      <div class="dash-sum" data-nav="all"><div class="dash-sum-icon" style="background:rgba(61,127,255,.18);color:#3d7fff">📝</div><div class="dash-sum-info"><div class="dash-sum-num">${total}</div><div class="dash-sum-lbl">전체 메모</div></div></div>
-      <div class="dash-sum" data-nav="today"><div class="dash-sum-icon" style="background:rgba(0,200,150,.18);color:#00c896">✏️</div><div class="dash-sum-info"><div class="dash-sum-num">${today}</div><div class="dash-sum-lbl">오늘 작성</div></div></div>
-      <div class="dash-sum" data-nav="week"><div class="dash-sum-icon" style="background:rgba(6,182,212,.18);color:#06b6d4">📆</div><div class="dash-sum-info"><div class="dash-sum-num">${thisW}</div><div class="dash-sum-lbl">이번주 작성</div></div></div>
-      <div class="dash-sum" data-nav="month"><div class="dash-sum-icon" style="background:rgba(255,208,96,.18);color:#ffd060">📅</div><div class="dash-sum-info"><div class="dash-sum-num">${thisM}</div><div class="dash-sum-lbl">이번달 작성</div></div></div>
-      <div class="dash-sum" data-nav="starred"><div class="dash-sum-icon" style="background:rgba(168,85,247,.18);color:#a855f7">★</div><div class="dash-sum-info"><div class="dash-sum-num">${starred}</div><div class="dash-sum-lbl">즐겨찾기</div></div></div>
+      <div class="dash-sum" data-nav="all"><div class="dash-sum-icon" style="background:rgba(61,127,255,.15);color:#3d7fff">📝</div><div class="dash-sum-info"><div class="dash-sum-num">${total}</div><div class="dash-sum-lbl">전체 메모</div></div></div>
+      <div class="dash-sum" data-nav="today"><div class="dash-sum-icon" style="background:rgba(0,200,150,.15);color:#00c896">🌟</div><div class="dash-sum-info"><div class="dash-sum-num">${today}</div><div class="dash-sum-lbl">오늘 작성</div></div></div>
+      <div class="dash-sum" data-nav="month"><div class="dash-sum-icon" style="background:rgba(255,208,96,.15);color:#ffd060">📅</div><div class="dash-sum-info"><div class="dash-sum-num">${thisM}</div><div class="dash-sum-lbl">이번달 작성</div></div></div>
+      <div class="dash-sum" data-nav="starred"><div class="dash-sum-icon" style="background:rgba(168,85,247,.15);color:#a855f7">★</div><div class="dash-sum-info"><div class="dash-sum-num">${starred}</div><div class="dash-sum-lbl">즐겨찾기</div></div></div>
     </div>
     <div class="dash-section">
-      <div class="dash-sec-hd"><span class="dash-sec-title">📂 카테고리</span><span class="dash-sec-sub">${cats.length}개 · 전체 ${total}개</span></div>
+      <div class="dash-sec-hd"><span class="dash-sec-title">📂 카테고리</span><span class="dash-sec-sub">${cats.length}개</span></div>
       <div class="dash-cats">
-        ${catItems.map(({c,ci,cnt,wCnt,recent,pct})=>`
-          <div class="dash-cat" data-nav="cat:${esc(c._id)}" style="background:${BG[ci]};border-color:${DOT[ci]}33">
+        ${catItems.map(({c,ci,cnt,recent})=>`
+          <div class="dash-cat" data-nav="cat:${esc(c._id)}" style="background:${BG[ci]}">
             <div class="dash-cat-accent" style="background:${DOT[ci]}"></div>
             <div class="dash-cat-top"><span class="dash-cat-name">${esc(c.name)}</span><span class="dash-cat-cnt" style="color:${DOT[ci]}">${cnt}</span></div>
-            <div class="dash-cat-bar-wrap"><div class="dash-cat-bar-fill" style="width:${pct}%;background:${DOT[ci]}"></div></div>
-            <div class="dash-cat-footer">
-              <span class="dash-cat-recent">${recent?esc((recent.title||'제목없음').slice(0,22)):'메모 없음'}</span>
-              ${wCnt>0?`<span class="dash-cat-week" style="color:${DOT[ci]}">+${wCnt}</span>`:''}
-            </div>
+            <div class="dash-cat-bar-wrap"><div class="dash-cat-bar-fill" style="width:${total?Math.round(cnt/total*100):0}%;background:${DOT[ci]}"></div></div>
+            <div class="dash-cat-recent">${recent?esc((recent.title||'제목없음').slice(0,28)):'메모 없음'}</div>
           </div>`).join('')}
-        ${uncat>0?`<div class="dash-cat" data-nav="uncat" style="background:rgba(90,110,154,.1);border-color:rgba(90,110,154,.2)">
+        ${uncat>0?`<div class="dash-cat" data-nav="uncat" style="background:rgba(90,110,154,.08)">
           <div class="dash-cat-accent" style="background:var(--t3)"></div>
           <div class="dash-cat-top"><span class="dash-cat-name">미분류</span><span class="dash-cat-cnt" style="color:var(--t3)">${uncat}</span></div>
           <div class="dash-cat-bar-wrap"><div class="dash-cat-bar-fill" style="width:${total?Math.round(uncat/total*100):0}%;background:var(--t3)"></div></div>
-          <div class="dash-cat-footer"><span class="dash-cat-recent">카테고리 없는 메모</span></div>
-        </div>`:''}
+          <div class="dash-cat-recent">카테고리 없는 메모</div></div>`:''}
       </div>
     </div>
     <div class="dash-bottom">
       <div class="dash-section">
-        <div class="dash-sec-hd"><span class="dash-sec-title">🕐 최근 활동</span><span class="dash-sec-sub">클릭하면 열림</span></div>
+        <div class="dash-sec-hd"><span class="dash-sec-title">🕐 최근 활동</span></div>
         <div class="dash-recent">
-          ${recent10.map(n=>{const ci=catColorIdx(n.category);const col=ci>=0?DOT[ci]:'var(--t3)';const cat=catLabel(n.category);return`<div class="dash-act" data-note-id="${n._id}"><span class="dash-act-dot" style="background:${col}"></span><div class="dash-act-body"><span class="dash-act-title">${esc((n.title||'제목없음').slice(0,30))}</span><span class="dash-act-meta">${cat!=='카테고리없음'?`<span style="color:${col}">${esc(cat)}</span> · `:``}${fmtShort(n.updatedAt||n.createdAt)}</span></div>${n.starred?'<span style="color:#ffd060;font-size:11px;flex-shrink:0">★</span>':''}</div>`;}).join('')}
+          ${recent8.map(n=>{const ci=catColorIdx(n.category);const col=ci>=0?DOT[ci]:'var(--t3)';const cat=catLabel(n.category);return`<div class="dash-act" data-note-id="${n._id}"><span class="dash-act-dot" style="background:${col}"></span><div class="dash-act-body"><span class="dash-act-title">${esc((n.title||'제목없음').slice(0,30))}</span><span class="dash-act-meta">${cat!=='카테고리없음'?esc(cat)+' · ':''}${fmtShort(n.updatedAt||n.createdAt)}</span></div></div>`;}).join('')}
         </div>
       </div>
       <div class="dash-section">
-        <div class="dash-sec-hd"><span class="dash-sec-title">📊 56일 활동</span><span class="dash-sec-sub" style="color:#ffd060">🔥 ${streak}일 연속</span></div>
-        <div class="dash-heatmap">${heatCells.map(({lv,lbl})=>`<div class="heat-cell lv${lv}" title="${lbl}"></div>`).join('')}</div>
-        <div class="dash-heat-legend"><span style="font-size:10px;color:var(--t3)">없음</span><div class="heat-cell lv0"></div><div class="heat-cell lv1"></div><div class="heat-cell lv2"></div><div class="heat-cell lv3"></div><div class="heat-cell lv4"></div><span style="font-size:10px;color:var(--t3)">많음</span></div>
-        ${catMonthly.length?`<div style="margin-top:14px"><div style="font-size:11px;color:var(--t3);margin-bottom:8px">이번달 카테고리별</div>${catMonthly.map(({name,cnt,ci})=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:11px;color:var(--t2);min-width:58px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</span><div style="flex:1;height:5px;background:rgba(255,255,255,.06);border-radius:3px"><div style="height:100%;width:${thisM?Math.round(cnt/thisM*100):0}%;background:${DOT[ci]};border-radius:3px"></div></div><span style="font-size:11px;color:${DOT[ci]};min-width:18px;text-align:right">${cnt}</span></div>`).join('')}</div>`:''}
+        <div class="dash-sec-hd"><span class="dash-sec-title">📊 최근 28일 활동</span></div>
+        <div class="dash-heatmap">${heatCells.join('')}</div>
+        <div class="dash-heat-legend"><span>없음</span><div class="heat-cell lv0"></div><div class="heat-cell lv1"></div><div class="heat-cell lv2"></div><div class="heat-cell lv3"></div><div class="heat-cell lv4"></div><span>많음</span></div>
       </div>
       <div class="dash-section">
         <div class="dash-sec-hd"><span class="dash-sec-title">🏷 태그 클라우드</span><span class="dash-sec-sub">${topTags.length}개</span></div>
-        ${topTags.length?`<div class="dash-tagcloud">${topTags.map(([tag,cnt])=>{const r=cnt/maxTC;const sz=11+Math.round(r*12);const op=0.55+r*0.45;return`<span class="dash-tag" data-tag="${esc(tag)}" style="font-size:${sz}px;opacity:${op}">#${esc(tag)}<span class="dash-tag-cnt">${cnt}</span></span>`;}).join('')}</div>`:`<div style="color:var(--t3);font-size:12px;padding:8px 0">메모에 #태그를 사용해보세요!</div>`}
+        <div class="dash-tagcloud">
+          ${topTags.map(([tag,cnt])=>{const r=cnt/maxTC;const sz=10+Math.round(r*14);const op=0.5+r*0.5;return`<span class="dash-tag" data-tag="${esc(tag)}" style="font-size:${sz}px;opacity:${op}">#${esc(tag)} <sup>${cnt}</sup></span>`;}).join('')}
+        </div>
       </div>
     </div>
   </div>`;
@@ -646,24 +626,22 @@ function renderDash(wrap) {
   wrap.querySelectorAll('.dash-sum[data-nav]').forEach(el=>{
     el.addEventListener('click',()=>{
       const nv=el.dataset.nav;
-      if(nv==='today'){nav='all';filterPeriod='today';setView('list');updateFilterUI();renderNotes();renderStats();renderTitle();}
-      else if(nv==='week'){nav='all';filterPeriod='week';setView('list');updateFilterUI();renderNotes();renderStats();renderTitle();}
-      else if(nv==='month'){nav='all';filterPeriod='month';setView('list');updateFilterUI();renderNotes();renderStats();renderTitle();}
-      else if(nv==='starred'){goNav('starred');}
-      else{goNav('all');}
+      if(nv==='today'){nav='all';filterPeriod='today';setView('list');updateFilterUI();renderNotes();renderStats();}
+      else if(nv==='month'){nav='all';filterPeriod='month';setView('list');updateFilterUI();renderNotes();renderStats();}
+      else if(nv==='starred'){goNav('starred');setView('list');}
+      else{goNav('all');setView('grid');}
     });
   });
   wrap.querySelectorAll('.dash-cat[data-nav]').forEach(el=>{
-    el.addEventListener('click',()=>{const nv=el.dataset.nav;if(nv==='uncat')goNav('uncat');else goNav(nv);});
+    el.addEventListener('click',()=>{const nv=el.dataset.nav;if(nv==='uncat'){goNav('uncat');setView('list');}else{goNav(nv);setView('grid');}});
   });
   wrap.querySelectorAll('.dash-act[data-note-id]').forEach(el=>{
     el.addEventListener('click',()=>openDet(el.dataset.noteId));
   });
   wrap.querySelectorAll('.dash-tag[data-tag]').forEach(el=>{
-    el.addEventListener('click',()=>{filterTag=el.dataset.tag;goNav('all');updateFilterUI();renderNotes();renderStats();});
+    el.addEventListener('click',()=>{filterTag=el.dataset.tag;goNav('all');setView('grid');updateFilterUI();renderNotes();renderStats();});
   });
 }
-
 
 
 // ── 메모 렌더 ──
@@ -1067,8 +1045,6 @@ async function doHardDel(id) {
 
 function goNav(target) {
   nav = target;
-  // 대시보드 뷰에서 다른 nav로 이동 시 grid로 전환
-  if (view === 'dash' && target !== 'all') setView('grid');
   renderTitle();
   renderAll();
   if (window.innerWidth <= 768) closeMobileSb();
@@ -1244,7 +1220,10 @@ function openAdd() {
 function openEdit(id) {
   const n = notes.find(x => x._id === id);
   if (!n) return;
-  editId = id; eTags = [...(n.tags || [])]; eLinks = (n.links || []).map(l => ({...l}));
+  editId = id; eLinks = (n.links || []).map(l => ({...l}));
+  // 본문 자동추출 태그 제외한 수동 태그만 eTags에 로드
+  const _autoTags = extractTags(n.content || '');
+  eTags = (n.tags || []).filter(t => !_autoTags.includes(t));
   g('edit-modal-title').textContent = '메모 수정';
   g('e-title').value   = n.title   || '';
   g('e-content').value = n.content || '';
@@ -1352,24 +1331,56 @@ function renderLinkRows() {
 }
 
 // ─ 태그 ─
-function renderTagPre() {
-  const el = g('tag-pre');
-  if (!eTags.length) {
-    el.innerHTML = '<span style="font-size:11px;color:var(--t3)">내용에 #태그를 입력하면 자동으로 표시됩니다</span>';
-    return;
-  }
-  el.innerHTML = eTags.map((t, i) =>
-    `<span class="tagchip">#${esc(t)}
-      <button class="tagdel" data-ti="${i}" type="button">✕</button>
-    </span>`
-  ).join('');
-  el.querySelectorAll('.tagdel').forEach(btn => {
-    btn.addEventListener('click', () => {
+function renderTagInput() {
+  const chips = g('tag-chips');
+  if (!chips) return;
+
+  // 현재 본문에서 자동추출된 태그
+  const autoRaw  = extractTags(getQuillContent ? getQuillContent() : (g('e-content')?.value || ''));
+  const autoOnly = autoRaw.filter(t => !eTags.includes(t)); // 수동에 없는 것만 표시
+
+  chips.innerHTML = [
+    // 수동 태그 (파란색, 삭제 가능)
+    ...eTags.map((t, i) =>
+      `<span class="tag-chip" data-ti="${i}">#${esc(t)}<button class="tag-chip-del" data-ti="${i}" type="button">✕</button></span>`
+    ),
+    // 자동추출 태그 (초록색, 미리보기)
+    ...autoOnly.map(t =>
+      `<span class="tag-chip auto" title="본문에서 자동추출">#${esc(t)}</span>`
+    )
+  ].join('');
+
+  chips.querySelectorAll('.tag-chip-del').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       eTags.splice(parseInt(btn.dataset.ti), 1);
-      renderTagPre();
+      renderTagInput();
     });
   });
+
+  // hint 업데이트
+  const hint = g('tag-hint');
+  if (hint) {
+    if (autoOnly.length > 0) {
+      hint.textContent = `본문에서 ${autoOnly.length}개 태그 자동 감지됨 (저장 시 추가)`;
+    } else {
+      hint.textContent = '본문의 #태그는 저장 시 자동 추가됩니다';
+    }
+  }
 }
+
+function addTag(raw) {
+  // '#' 제거, 공백 제거, 빈값 무시
+  const tag = raw.replace(/^#+/, '').replace(/[,\s]+/g, '').trim();
+  if (!tag) return;
+  if (!eTags.includes(tag)) {
+    eTags.push(tag);
+    renderTagInput();
+  }
+}
+
+// 하위호환 alias
+function renderTagPre() { renderTagInput(); }
 
 // ══════════════════════════════════════════════════════
 // 상세보기 모달
@@ -1566,6 +1577,31 @@ function bindEvents() {
 
   // 링크 추가
   g('add-link-btn').addEventListener('click', addLink);
+
+  // 태그 입력란 이벤트
+  const tagInp = g('tag-inp');
+  const tagWrap = g('tag-input-wrap');
+  if (tagInp) {
+    // Enter / 쉼표 / 공백 → 태그 추가
+    tagInp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',' || e.key === ' ') {
+        e.preventDefault();
+        const val = tagInp.value.trim();
+        if (val) { addTag(val); tagInp.value = ''; }
+      } else if (e.key === 'Backspace' && tagInp.value === '' && eTags.length) {
+        // 입력창 비어있고 백스페이스 → 마지막 태그 삭제
+        eTags.pop();
+        renderTagInput();
+      }
+    });
+    // 포커스 해제 시 남은 텍스트 처리
+    tagInp.addEventListener('blur', () => {
+      const val = tagInp.value.trim();
+      if (val) { addTag(val); tagInp.value = ''; }
+    });
+    // 랩 클릭 시 입력창 포커스
+    if (tagWrap) tagWrap.addEventListener('click', () => tagInp.focus());
+  }
 
   // 상세 모달
   g('det-close-btn').addEventListener('click', closeDet);
