@@ -10,7 +10,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 import {
   getAuth, GoogleAuthProvider,
-  signInWithPopup, signOut, onAuthStateChanged
+  signInWithPopup, signInWithRedirect, getRedirectResult,
+  signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
 // ══════════════════════════════════════════════════════
@@ -1471,11 +1472,9 @@ function closeDet() { g('det-ov').classList.remove('on'); }
 // ══════════════════════════════════════════════════════
 async function googleLogin() {
   try {
-    await signInWithPopup(auth, provider);
+    await signInWithRedirect(auth, provider);
   } catch (err) {
-    if (err.code !== 'auth/popup-closed-by-user') {
-      alert('로그인 실패: ' + err.message);
-    }
+    alert('로그인 실패: ' + err.message);
   }
 }
 
@@ -1914,6 +1913,11 @@ function initQuillResize() {
 // ══════════════════════════════════════════════════════
 // 인증 상태 감지 → 진입점
 // ══════════════════════════════════════════════════════
+// 리디렉션 로그인 결과 처리
+getRedirectResult(auth).catch(err => {
+  if (err) console.error('redirect login error:', err.message);
+});
+
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     me = user;
