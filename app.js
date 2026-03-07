@@ -579,32 +579,79 @@ let qEditId = null; // 편집 중인 명언 id
 function openQuote(id) {
   qEditId = id || null;
   const n = id ? quotes.find(q => q._id === id) : null;
-  g('quote-modal-title').textContent = id ? '명언 수정' : '새 명언';
-  g('q-text').value   = n ? (n.text   || '') : '';
-  g('q-author').value = n ? (n.author || '') : '';
-  updateQCharCnt();
-  g('quote-ov').classList.remove('hidden');
-  setTimeout(() => g('q-text').focus(), 80);
+
+  // 기존 모달 제거 후 새로 생성
+  const existing = document.getElementById('quote-ov');
+  if (existing) existing.remove();
+
+  const ov = document.createElement('div');
+  ov.id = 'quote-ov';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.72);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+  ov.innerHTML = `
+    <div style="background:var(--card2);border:1px solid var(--bd2);border-radius:18px;width:100%;max-width:500px;box-shadow:0 24px 64px rgba(0,0,0,.72);">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bd);">
+        <span style="font-size:15px;font-weight:700;color:var(--t);">${id ? '명언 수정' : '✏️ 새 명언 추가'}</span>
+        <button id="qm-close" style="background:none;border:none;color:var(--t3);font-size:20px;cursor:pointer;padding:2px 8px;border-radius:6px;line-height:1;">✕</button>
+      </div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:16px;">
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <label style="font-size:11px;font-weight:600;color:var(--t3);letter-spacing:.3px;">명언 한 줄 <span style="color:#ec4899">*</span></label>
+          <input id="qm-text" type="text" placeholder="명언을 입력하세요..."
+            style="padding:10px 14px;background:var(--bg3);border:1px solid var(--bd);border-radius:10px;color:var(--t);font-size:14px;outline:none;width:100%;box-sizing:border-box;"
+            maxlength="300" autocomplete="off" value="${esc(n ? (n.text||'') : '')}">
+          <div id="qm-cnt" style="font-size:10px;color:var(--t3);text-align:right;">${(n ? (n.text||'') : '').length} / 300</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <label style="font-size:11px;font-weight:600;color:var(--t3);letter-spacing:.3px;">출처 / 작가 <span style="font-weight:400;">(선택)</span></label>
+          <input id="qm-author" type="text" placeholder="예: 공자, 스티브 잡스, 익명..."
+            style="padding:10px 14px;background:var(--bg3);border:1px solid var(--bd);border-radius:10px;color:var(--t);font-size:14px;outline:none;width:100%;box-sizing:border-box;"
+            maxlength="100" autocomplete="off" value="${esc(n ? (n.author||'') : '')}">
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--bd);">
+        <button id="qm-cancel" class="btn btng">취소</button>
+        <button id="qm-save"   class="btn btnp">저장</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(ov);
+
+  // 이벤트
+  const txtInp = document.getElementById('qm-text');
+  const cntEl  = document.getElementById('qm-cnt');
+  txtInp.addEventListener('input', () => {
+    const len = txtInp.value.length;
+    cntEl.textContent = len + ' / 300';
+    cntEl.style.color = len > 270 ? '#ec4899' : 'var(--t3)';
+  });
+  txtInp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doSaveQuote(); } });
+  document.getElementById('qm-close').addEventListener('click',  closeQuote);
+  document.getElementById('qm-cancel').addEventListener('click', closeQuote);
+  document.getElementById('qm-save').addEventListener('click',   doSaveQuote);
+  ov.addEventListener('click', e => { if (e.target === ov) closeQuote(); });
+
+  setTimeout(() => txtInp.focus(), 80);
 }
 
 function closeQuote() {
-  g('quote-ov').classList.add('hidden');
+  const ov = document.getElementById('quote-ov');
+  if (ov) ov.remove();
   qEditId = null;
 }
 
 function updateQCharCnt() {
-  const len = (g('q-text').value || '').length;
-  const el  = g('q-char-cnt');
-  if (el) el.textContent = len + ' / 300';
-  if (el) el.style.color = len > 270 ? '#ec4899' : 'var(--t3)';
+  // 동적 생성 방식이므로 별도 호출 불필요 — 하위 호환용 유지
 }
 
-async function saveQuote() {
-  const text   = (g('q-text').value   || '').trim();
-  const author = (g('q-author').value || '').trim();
-  if (!text) { toast('명언을 입력해주세요.', 'wrn'); g('q-text').focus(); return; }
-  const btn = g('quote-save-btn');
-  btn.disabled = true;
+async function doSaveQuote() {
+  const txtEl    = document.getElementById('qm-text');
+  const authorEl = document.getElementById('qm-author');
+  if (!txtEl) return;
+  const text   = (txtEl.value   || '').trim();
+  const author = (authorEl ? authorEl.value : '').trim();
+  if (!text) { txtEl.style.borderColor = '#ec4899'; txtEl.focus(); toast('명언을 입력해주세요.', 'wrn'); return; }
+  const saveBtn = document.getElementById('qm-save');
+  if (saveBtn) saveBtn.disabled = true;
   try {
     const now  = serverTimestamp();
     const data = { text, author };
@@ -614,7 +661,7 @@ async function saveQuote() {
       if (idx >= 0) quotes[idx] = { ...quotes[idx], text, author, updatedAt: new Date().toISOString() };
       toast('명언을 수정했습니다.');
     } else {
-      const ref  = await addDoc(colQuotes(), { ...data, createdAt: now, updatedAt: now });
+      const ref = await addDoc(colQuotes(), { ...data, createdAt: now, updatedAt: now });
       quotes.unshift({ _id: ref.id, text, author, createdAt: new Date().toISOString() });
       toast('명언을 저장했습니다.');
     }
@@ -622,10 +669,11 @@ async function saveQuote() {
     renderAll();
   } catch(e) {
     toast('저장 실패: ' + e.message, 'err');
-  } finally {
-    btn.disabled = false;
+    if (saveBtn) saveBtn.disabled = false;
   }
 }
+
+async function saveQuote() { await doSaveQuote(); } // 하위 호환
 
 async function deleteQuote(id) {
   if (!confirm('이 명언을 삭제할까요?')) return;
@@ -2054,16 +2102,7 @@ function bindEvents() {
   const importFile = g('import-file');
   if (importFile) importFile.addEventListener('change', importData);
 
-  // ── 명언 모달
-  g('quote-close-btn').addEventListener('click', closeQuote);
-  g('quote-cancel-btn').addEventListener('click', closeQuote);
-  g('quote-ov').addEventListener('click', e => { if (e.target === g('quote-ov')) closeQuote(); });
-  g('quote-save-btn').addEventListener('click', saveQuote);
-  const qInp = g('q-text');
-  if (qInp) {
-    qInp.addEventListener('input', updateQCharCnt);
-    qInp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); saveQuote(); } });
-  }
+  // ── 명언 모달은 openQuote() 호출 시 동적 생성 → 별도 바인딩 불필요
 
   // ── Quill 에디터 높이 드래그 리사이즈
   initQuillResize();
