@@ -540,8 +540,10 @@ input[type="datetime-local"].fc{color-scheme:dark;}
 .qrow-btn:hover{background:var(--bg3);color:var(--t);}
 .qrow-star{color:#ffd060;}
 /* 명언 모달 */
-.modal-quote{max-width:520px;height:auto !important;max-height:none !important;}
-.modal-quote .mbody{flex:none;overflow:visible;}
+.modal-quote{max-width:500px;height:auto !important;max-height:80vh !important;overflow:visible !important;display:block !important;}
+.modal-quote .mhd{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bd);}
+.modal-quote .mbody{display:flex !important;flex-direction:column !important;gap:14px;padding:20px;height:auto !important;min-height:auto !important;flex:none !important;overflow:visible !important;}
+.modal-quote .mfoot{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--bd);}
 .quote-inp{font-size:15px;font-weight:500;}
 .quote-cnt{font-size:10px;color:var(--t3);text-align:right;margin-top:3px;}
 /* 한줄명언 뷰에서 뷰 버튼 그룹 숨김 */
