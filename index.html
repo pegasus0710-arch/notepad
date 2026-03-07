@@ -76,6 +76,25 @@ a{text-decoration:none;}
 .sb-sec{padding:16px 12px 8px;}
 .sb-lbl{font-size:10px;font-weight:700;color:var(--t3);letter-spacing:.8px;text-transform:uppercase;padding:0 4px;}
 .sb-div{height:1px;background:var(--bd);margin:8px 12px;}
+
+/* ── 사이드바 오늘의 추천요리 ── */
+.sb-recipe{padding:10px 12px 16px;flex-shrink:0;}
+.sb-recipe-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.sb-recipe-label{font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.3px;text-transform:uppercase;}
+.sb-recipe-refresh{background:none;border:none;color:var(--t3);cursor:pointer;font-size:13px;padding:3px 5px;border-radius:6px;transition:.15s;line-height:1;}
+.sb-recipe-refresh:hover{background:rgba(255,255,255,.08);color:var(--t);}
+.sb-nc{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:11px 12px;cursor:pointer;transition:.18s;position:relative;overflow:hidden;}
+.sb-nc:hover{border-color:var(--acc);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.25);}
+.sb-nc::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:3px 0 0 3px;}
+.sb-nc.bc0::before{background:#3d7fff;}.sb-nc.bc1::before{background:#22c55e;}.sb-nc.bc2::before{background:#f59e0b;}
+.sb-nc.bc3::before{background:#a855f7;}.sb-nc.bc4::before{background:#06b6d4;}.sb-nc.bc5::before{background:#ec4899;}
+.sb-nc.bc6::before{background:#84cc16;}.sb-nc.bc7::before{background:#f97316;}.sb-nc.bcX::before{background:var(--t3);}
+.sb-nc-title{font-size:12px;font-weight:600;color:var(--t);margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sb-nc-body{font-size:11px;color:var(--t2);line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+.sb-nc-tags{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;}
+.sb-nc-tag{font-size:10px;padding:1px 6px;background:rgba(255,255,255,.07);border-radius:10px;color:var(--t3);}
+.sb-nc-foot{font-size:10px;color:var(--t3);margin-top:6px;}
+
 .nrow{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r);cursor:pointer;transition:.18s;margin-top:2px;}
 .nrow:hover{background:rgba(255,255,255,.05);}
 .nrow.on{background:rgba(61,127,255,.12);color:var(--acc2);}
@@ -684,6 +703,16 @@ input[type="datetime-local"].fc{color-scheme:dark;}
         </select>
       </div>
       <button class="emptybtn" id="empty-trash-btn">🗑 휴지통 비우기</button>
+    </div>
+
+    <!-- 오늘의 추천요리 -->
+    <div class="sb-div"></div>
+    <div class="sb-recipe hidden" id="sb-recipe">
+      <div class="sb-recipe-hd">
+        <span class="sb-recipe-label">🍽 오늘의 추천요리</span>
+        <button class="sb-recipe-refresh" id="sb-recipe-refresh" title="다른 요리 추천">🔀</button>
+      </div>
+      <div class="sb-recipe-card" id="sb-recipe-card"></div>
     </div>
   </aside>
 

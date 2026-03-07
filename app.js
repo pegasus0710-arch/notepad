@@ -571,6 +571,56 @@ function clearFilters() {
 // ══════════════════════════════════════════════════════
 // 대시보드 렌더
 // ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+// 사이드바 오늘의 추천요리
+// ══════════════════════════════════════════════════════
+function getRecipeCat() {
+  return cats.find(c => (c.name || '').replace(/\s/g,'').toLowerCase().includes('레시피')) || null;
+}
+
+function renderSidebarRecipe(forceNew) {
+  const wrap  = document.getElementById('sb-recipe');
+  const card  = document.getElementById('sb-recipe-card');
+  if (!wrap || !card) return;
+
+  const rCat  = getRecipeCat();
+  if (!rCat) { wrap.classList.add('hidden'); return; }
+
+  const pool  = notes.filter(n => !n._deleted && n.category === rCat._id);
+  if (!pool.length) { wrap.classList.add('hidden'); return; }
+
+  // 오늘 날짜 기반 기본 인덱스 (새로고침 버튼은 강제 랜덤)
+  let n;
+  if (forceNew) {
+    // 현재와 다른 메모 고르기
+    const curId = card.dataset.curId || '';
+    const others = pool.filter(p => p._id !== curId);
+    n = (others.length ? others : pool)[Math.floor(Math.random() * (others.length || pool.length))];
+  } else {
+    const seed = new Date().toDateString(); // 같은 날이면 같은 메모
+    let hash = 0;
+    for (let c of seed) hash = (hash * 31 + c.charCodeAt(0)) & 0xffffffff;
+    n = pool[Math.abs(hash) % pool.length];
+  }
+
+  card.dataset.curId = n._id;
+  const body = n.content ? (isRich(n.content) ? stripHtml(n.content) : n.content).slice(0, 120) : '';
+  const tagsHtml = (n.tags||[]).length
+    ? `<div class="sb-nc-tags">${n.tags.slice(0,5).map(t=>`<span class="sb-nc-tag">#${esc(t)}</span>`).join('')}</div>` : '';
+
+  card.innerHTML = `
+    <div class="sb-nc ${barCls(n.category)}" data-note-id="${n._id}">
+      <div class="sb-nc-title">${esc(n.title || '제목 없음')}</div>
+      ${body ? `<div class="sb-nc-body">${esc(body)}</div>` : ''}
+      ${tagsHtml}
+      <div class="sb-nc-foot">📅 ${fmt(n.createdAt)}</div>
+    </div>`;
+
+  // 카드 클릭 → 메모 열기
+  card.querySelector('.sb-nc').addEventListener('click', () => openNote(n._id));
+  wrap.classList.remove('hidden');
+}
+
 function showRandomQuoteBanner() {
   const banner = document.getElementById('quote-banner');
   if (!banner) return;
@@ -2128,6 +2178,10 @@ function bindEvents() {
 
   // ── 명언 모달은 openQuote() 호출 시 동적 생성 → 별도 바인딩 불필요
 
+  // ── 추천요리 새로고침
+  const recipeRefresh = g('sb-recipe-refresh');
+  if (recipeRefresh) recipeRefresh.addEventListener('click', () => renderSidebarRecipe(true));
+
   // ── Quill 에디터 높이 드래그 리사이즈
   initQuillResize();
 }
@@ -2344,6 +2398,7 @@ onAuthStateChanged(auth, async (user) => {
     renderTitle();
     renderAll();
     showRandomQuoteBanner();
+    renderSidebarRecipe(false);
   } else {
     // 로그아웃 상태
     me = null; notes = []; trashed = []; cats = []; quotes = [];
