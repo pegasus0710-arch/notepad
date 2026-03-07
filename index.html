@@ -94,6 +94,16 @@ a{text-decoration:none;}
 .sb-nc-tags{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;}
 .sb-nc-tag{font-size:10px;padding:1px 6px;background:rgba(255,255,255,.07);border-radius:10px;color:var(--t3);}
 .sb-nc-foot{font-size:10px;color:var(--t3);margin-top:6px;}
+.sb-lprev{display:block;border:1px solid var(--bd);border-radius:8px;overflow:hidden;margin:6px 0;text-decoration:none;transition:.15s;}
+.sb-lprev:hover{border-color:var(--acc);}
+.sb-lprev-img{width:100%;height:90px;object-fit:cover;display:block;}
+.sb-lprev-ph{height:50px;display:flex;align-items:center;justify-content:center;font-size:20px;background:var(--bg3);}
+.sb-lprev-info{padding:6px 8px;}
+.sb-lprev-title{font-size:11px;font-weight:600;color:var(--t);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sb-lprev-url{display:flex;align-items:center;gap:4px;margin-top:2px;}
+.sb-lprev-fav{width:10px;height:10px;border-radius:2px;}
+.sb-lprev-url span{font-size:10px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
 
 .nrow{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r);cursor:pointer;transition:.18s;margin-top:2px;}
 .nrow:hover{background:rgba(255,255,255,.05);}
@@ -706,8 +716,8 @@ input[type="datetime-local"].fc{color-scheme:dark;}
     </div>
 
     <!-- 오늘의 추천요리 -->
-    <div class="sb-div"></div>
     <div class="sb-recipe hidden" id="sb-recipe">
+      <div class="sb-div"></div>
       <div class="sb-recipe-hd">
         <span class="sb-recipe-label">🍽 오늘의 추천요리</span>
         <button class="sb-recipe-refresh" id="sb-recipe-refresh" title="다른 요리 추천">🔀</button>

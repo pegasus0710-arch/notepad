@@ -589,35 +589,61 @@ function renderSidebarRecipe(forceNew) {
   const pool  = notes.filter(n => !n._deleted && n.category === rCat._id);
   if (!pool.length) { wrap.classList.add('hidden'); return; }
 
-  // 오늘 날짜 기반 기본 인덱스 (새로고침 버튼은 강제 랜덤)
   let n;
   if (forceNew) {
-    // 현재와 다른 메모 고르기
-    const curId = card.dataset.curId || '';
+    const curId  = card.dataset.curId || '';
     const others = pool.filter(p => p._id !== curId);
     n = (others.length ? others : pool)[Math.floor(Math.random() * (others.length || pool.length))];
   } else {
-    const seed = new Date().toDateString(); // 같은 날이면 같은 메모
+    const seed = new Date().toDateString();
     let hash = 0;
-    for (let c of seed) hash = (hash * 31 + c.charCodeAt(0)) & 0xffffffff;
+    for (const c of seed) hash = (hash * 31 + c.charCodeAt(0)) & 0xffffffff;
     n = pool[Math.abs(hash) % pool.length];
   }
 
   card.dataset.curId = n._id;
-  const body = n.content ? (isRich(n.content) ? stripHtml(n.content) : n.content).slice(0, 120) : '';
+
+  const body    = n.content ? (isRich(n.content) ? stripHtml(n.content) : n.content).slice(0, 120) : '';
   const tagsHtml = (n.tags||[]).length
     ? `<div class="sb-nc-tags">${n.tags.slice(0,5).map(t=>`<span class="sb-nc-tag">#${esc(t)}</span>`).join('')}</div>` : '';
+  const hasLink = (n.links||[]).some(l => l?.url);
 
   card.innerHTML = `
     <div class="sb-nc ${barCls(n.category)}" data-note-id="${n._id}">
       <div class="sb-nc-title">${esc(n.title || '제목 없음')}</div>
       ${body ? `<div class="sb-nc-body">${esc(body)}</div>` : ''}
+      ${hasLink ? `<div class="sb-lprev-slot"></div>` : ''}
       ${tagsHtml}
       <div class="sb-nc-foot">📅 ${fmt(n.createdAt)}</div>
     </div>`;
 
-  // 카드 클릭 → 메모 열기
-  card.querySelector('.sb-nc').addEventListener('click', () => openNote(n._id));
+  card.querySelector('.sb-nc').addEventListener('click', e => {
+    if (e.target.closest('a')) return; // 링크 클릭은 메모 열기 막기
+    openNote(n._id);
+  });
+
+  // 링크 썸네일 비동기 로드
+  if (hasLink) {
+    const link = n.links.find(l => l?.url);
+    const slot = card.querySelector('.sb-lprev-slot');
+    fetchThumb(link.url).then(data => {
+      if (!slot || !data) return;
+      const fav = favicon(link.url);
+      slot.innerHTML = `<a class="sb-lprev" href="${esc(link.url)}" target="_blank" rel="noopener">
+        ${data.img
+          ? `<img class="sb-lprev-img" src="${esc(data.img)}" alt="" onerror="this.style.display='none'">`
+          : `<div class="sb-lprev-ph">🔗</div>`}
+        <div class="sb-lprev-info">
+          <div class="sb-lprev-title">${esc(data.title || link.label || domain(link.url))}</div>
+          <div class="sb-lprev-url">
+            ${fav ? `<img class="sb-lprev-fav" src="${esc(fav)}" alt="" onerror="this.style.display='none'">` : ''}
+            <span>${esc(domain(link.url))}</span>
+          </div>
+        </div>
+      </a>`;
+    }).catch(()=>{});
+  }
+
   wrap.classList.remove('hidden');
 }
 
