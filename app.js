@@ -571,9 +571,33 @@ function clearFilters() {
 // ══════════════════════════════════════════════════════
 // 대시보드 렌더
 // ══════════════════════════════════════════════════════
-// ══════════════════════════════════════════════════════
-// 한줄명언
-// ══════════════════════════════════════════════════════
+function showRandomQuoteBanner() {
+  const banner = document.getElementById('quote-banner');
+  if (!banner) return;
+  if (!quotes || quotes.length === 0) { banner.classList.add('hidden'); return; }
+
+  const q = quotes[Math.floor(Math.random() * quotes.length)];
+  document.getElementById('qbanner-text').textContent   = q.text   || '';
+  const authorEl = document.getElementById('qbanner-author');
+  if (q.author) { authorEl.textContent = q.author; authorEl.style.display = ''; }
+  else          { authorEl.textContent = '';        authorEl.style.display = 'none'; }
+
+  banner.classList.remove('hidden');
+
+  // 닫기 버튼
+  const closeBtn = document.getElementById('qbanner-close');
+  if (closeBtn) {
+    closeBtn.onclick = () => {
+      banner.style.animation = 'none';
+      banner.style.opacity   = '0';
+      banner.style.transform = 'translateY(-6px)';
+      banner.style.transition = 'opacity .25s,transform .25s';
+      setTimeout(() => banner.classList.add('hidden'), 250);
+    };
+  }
+}
+
+
 let qEditId = null; // 편집 중인 명언 id
 
 function openQuote(id) {
@@ -2319,6 +2343,7 @@ onAuthStateChanged(auth, async (user) => {
     g('loading-screen').classList.add('hidden');
     renderTitle();
     renderAll();
+    showRandomQuoteBanner();
   } else {
     // 로그아웃 상태
     me = null; notes = []; trashed = []; cats = []; quotes = [];

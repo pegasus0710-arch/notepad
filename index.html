@@ -524,7 +524,16 @@ input[type="datetime-local"].fc{color-scheme:dark;}
 @media(max-width:600px){.dash-summaries{grid-template-columns:1fr 1fr;}.vdash{padding:12px;}}
 @media(max-width:600px){.dash-summaries{grid-template-columns:1fr 1fr;}.vdash{padding:12px;}}
 
-/* ── 한줄명언 뷰 ── */
+/* ── 상단 명언 배너 ── */
+.qbanner{display:flex;align-items:center;gap:10px;padding:10px 20px;background:linear-gradient(90deg,rgba(61,127,255,.12),rgba(168,85,247,.10));border-bottom:1px solid rgba(61,127,255,.2);position:relative;animation:qbanner-in .4s ease;}
+@keyframes qbanner-in{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
+.qbanner-icon{font-size:15px;flex-shrink:0;}
+.qbanner-text{font-size:13px;color:var(--t);font-style:italic;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.qbanner-author{font-size:11px;color:var(--acc2);flex-shrink:0;white-space:nowrap;}
+.qbanner-author::before{content:"— ";}
+.qbanner-close{background:none;border:none;color:var(--t3);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:5px;flex-shrink:0;line-height:1;transition:.15s;}
+.qbanner-close:hover{background:rgba(255,255,255,.08);color:var(--t);}
+
 .vquote{display:flex;flex-direction:column;gap:0;padding:0 24px;}
 .q-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 14px;}
 .q-count{font-size:13px;color:var(--t3);font-weight:600;}
@@ -767,6 +776,14 @@ input[type="datetime-local"].fc{color-scheme:dark;}
         <div class="tag-chip-wrap" id="tag-chip-wrap"></div>
       </div>
       <button class="chip-clear hidden" id="chip-clear">✕ 필터 해제</button>
+    </div>
+
+    <!-- QUOTE BANNER -->
+    <div class="qbanner hidden" id="quote-banner">
+      <span class="qbanner-icon">💬</span>
+      <span class="qbanner-text" id="qbanner-text"></span>
+      <span class="qbanner-author" id="qbanner-author"></span>
+      <button class="qbanner-close" id="qbanner-close" title="닫기">✕</button>
     </div>
 
     <!-- PAGE HEADER -->
