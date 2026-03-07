@@ -523,6 +523,30 @@ input[type="datetime-local"].fc{color-scheme:dark;}
 @media(max-width:900px){.dash-summaries{grid-template-columns:repeat(2,1fr);}.db3{grid-template-columns:1fr;}}
 @media(max-width:600px){.dash-summaries{grid-template-columns:1fr 1fr;}.vdash{padding:12px;}}
 @media(max-width:600px){.dash-summaries{grid-template-columns:1fr 1fr;}.vdash{padding:12px;}}
+
+/* ── 한줄명언 뷰 ── */
+.vquote{display:flex;flex-direction:column;gap:0;padding:0 24px;}
+.qrow{display:flex;align-items:center;gap:14px;padding:13px 16px;border-bottom:1px solid var(--bd);transition:.15s;position:relative;}
+.qrow:first-child{border-top:1px solid var(--bd);}
+.qrow:hover{background:rgba(255,255,255,.04);}
+.qrow-num{font-size:11px;color:var(--t3);min-width:28px;text-align:right;flex-shrink:0;font-weight:600;}
+.qrow-quote{font-size:14px;color:var(--t);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.5;}
+.qrow-author{font-size:11px;color:var(--acc2);flex-shrink:0;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.qrow-author::before{content:"— ";}
+.qrow-date{font-size:10px;color:var(--t3);flex-shrink:0;min-width:70px;text-align:right;}
+.qrow-acts{display:flex;gap:4px;flex-shrink:0;opacity:0;transition:.15s;}
+.qrow:hover .qrow-acts{opacity:1;}
+.qrow-btn{background:transparent;border:none;color:var(--t3);cursor:pointer;padding:3px 6px;border-radius:5px;font-size:12px;transition:.15s;}
+.qrow-btn:hover{background:var(--bg3);color:var(--t);}
+.qrow-star{color:#ffd060;}
+/* 명언 모달 */
+.modal-quote{max-width:520px;}
+.quote-inp{font-size:15px;font-weight:500;}
+.quote-cnt{font-size:10px;color:var(--t3);text-align:right;margin-top:3px;}
+/* 한줄명언 뷰에서 뷰 버튼 그룹 숨김 */
+.quote-mode .vgrp{opacity:.3;pointer-events:none;}
+.quote-mode .tl-grp-btn{display:none;}
+.quote-mode .hsort{opacity:.3;pointer-events:none;}
 .hidden{display:none!important;}
 .pagination{display:flex;align-items:center;justify-content:center;gap:12px;padding:16px;}
 .pg-btn{padding:6px 16px;background:var(--card);border:1px solid var(--bd);border-radius:8px;color:var(--t2);font-size:12px;cursor:pointer;transition:.18s;}
@@ -602,6 +626,10 @@ input[type="datetime-local"].fc{color-scheme:dark;}
       <div class="nrow" id="nav-uncat">
         <span class="ni">📂</span><span class="nlbl">카테고리 없음</span>
         <span class="ncnt" id="cnt-uncat">0</span>
+      </div>
+      <div class="nrow" id="nav-quote">
+        <span class="ni">💬</span><span class="nlbl">한줄명언</span>
+        <span class="ncnt" id="cnt-quote">0</span>
       </div>
       <div class="nrow" id="nav-trash">
         <span class="ni">🗑️</span><span class="nlbl">휴지통</span>
@@ -737,6 +765,33 @@ input[type="datetime-local"].fc{color-scheme:dark;}
         <div class="pg-info" id="pg-info"></div>
         <button class="pg-btn" id="pg-next">다음 &#9654;</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- QUOTE MODAL -->
+<div class="ov hidden" id="quote-ov">
+  <div class="modal modal-quote">
+    <div class="mhd">
+      <span class="mtitle" id="quote-modal-title">새 명언</span>
+      <button class="mx" id="quote-close-btn">✕</button>
+    </div>
+    <div class="mbody">
+      <div class="fg">
+        <label class="fl">명언 한 줄</label>
+        <input class="fc quote-inp" id="q-text" type="text"
+          placeholder="명언을 입력하세요..." autocomplete="off" maxlength="300">
+        <div class="quote-cnt" id="q-char-cnt">0 / 300</div>
+      </div>
+      <div class="fg">
+        <label class="fl">출처 / 작가 <span style="color:var(--t3);font-weight:400">(선택)</span></label>
+        <input class="fc" id="q-author" type="text"
+          placeholder="예: 공자, 스티브 잡스, 익명..." autocomplete="off" maxlength="100">
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btng" id="quote-cancel-btn">취소</button>
+      <button class="btn btnp" id="quote-save-btn">저장</button>
     </div>
   </div>
 </div>

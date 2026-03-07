@@ -38,6 +38,7 @@ let me        = null;   // 로그인 유저
 let notes     = [];     // 활성 메모
 let trashed   = [];     // 휴지통 메모
 let cats      = [];     // 카테고리 [{_id, name}]
+let quotes    = [];     // 한줄명언 [{_id, text, author, createdAt}]
 let trashDays = 30;
 
 let nav   = 'all';      // 'all' | 'trash' | 'cat:{id}'
@@ -65,8 +66,9 @@ const thumbCache = new Map();  // 링크 썸네일 캐시
 // ══════════════════════════════════════════════════════
 // Firestore 경로 헬퍼
 // ══════════════════════════════════════════════════════
-const colNotes = () => collection(db, 'users', me.uid, 'notes');
-const colCats  = () => collection(db, 'users', me.uid, 'categories');
+const colNotes  = () => collection(db, 'users', me.uid, 'notes');
+const colCats   = () => collection(db, 'users', me.uid, 'categories');
+const colQuotes = () => collection(db, 'users', me.uid, 'quotes');
 const docSett  = () => doc(db, 'users', me.uid, 'settings', 'main');
 
 // ══════════════════════════════════════════════════════
@@ -89,6 +91,14 @@ async function loadAll() {
     // 카테고리
     const cs = await getDocs(colCats());
     cats = cs.docs.map(d => ({ ...d.data(), _id: d.id }));
+
+    // 한줄명언
+    const qs = await getDocs(colQuotes());
+    quotes = qs.docs.map(d => ({
+      ...d.data(), _id: d.id,
+      createdAt: toDate(d.data().createdAt),
+      updatedAt: toDate(d.data().updatedAt),
+    })).sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
 
     // 설정
     try {
@@ -390,6 +400,7 @@ function renderAll() {
 function renderTitle() {
   const el = g('page-hd');
   if      (nav === 'all')             el.textContent = '📝 전체 메모';
+  else if (nav === 'quote')           el.textContent = '💬 한줄명언';
   else if (nav === 'trash')           el.textContent = '🗑️ 휴지통';
   else if (nav === 'starred')         el.textContent = '★ 즐겨찾기';
   else if (nav === 'uncat')           el.textContent = '📂 카테고리 없음';
@@ -411,6 +422,7 @@ function renderSidebar() {
   g('nav-trash').classList.toggle('on', nav === 'trash');
   const _ns=g('nav-starred'); if(_ns){_ns.classList.toggle('on',nav==='starred');const sc=g('cnt-starred');if(sc)sc.textContent=notes.filter(n=>n.starred).length;}
   const _nu=g('nav-uncat');   if(_nu){_nu.classList.toggle('on',nav==='uncat');const uc=g('cnt-uncat');if(uc)uc.textContent=notes.filter(n=>!n.category||!cats.find(c=>c._id===n.category)).length;}
+  const _nq=g('nav-quote');   if(_nq){_nq.classList.toggle('on',nav==='quote');const qc=g('cnt-quote');if(qc)qc.textContent=quotes.length;}
   const _nd=g('nav-dash');    if(_nd)_nd.classList.toggle('on',view==='dash'&&nav==='all');
 
   // 휴지통 설정 패널
@@ -449,6 +461,11 @@ function renderSidebar() {
 }
 
 function renderStats() {
+  if (nav === 'quote' || view === 'quote') {
+    g('page-stats').innerHTML =
+      `<span>전체 <strong>${quotes.length}</strong>개</span>`;
+    return;
+  }
   const list = getFiltered();
   g('page-stats').innerHTML =
     `<span>표시 <strong>${list.length}</strong>개</span>` +
@@ -474,8 +491,8 @@ function renderChipBar() {
   const chipBar = g('chip-bar');
   if (!chipBar) return;
 
-  // 휴지통이면 칩바 숨김
-  chipBar.style.display = isT ? 'none' : '';
+  // 휴지통/명언이면 칩바 숨김
+  chipBar.style.display = (isT || nav === 'quote') ? 'none' : '';
 
   // ── 카테고리 칩
   const scroll = g('chip-scroll');
@@ -554,6 +571,131 @@ function clearFilters() {
 // ══════════════════════════════════════════════════════
 // 대시보드 렌더
 // ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+// 한줄명언
+// ══════════════════════════════════════════════════════
+let qEditId = null; // 편집 중인 명언 id
+
+function openQuote(id) {
+  qEditId = id || null;
+  const n = id ? quotes.find(q => q._id === id) : null;
+  g('quote-modal-title').textContent = id ? '명언 수정' : '새 명언';
+  g('q-text').value   = n ? (n.text   || '') : '';
+  g('q-author').value = n ? (n.author || '') : '';
+  updateQCharCnt();
+  g('quote-ov').classList.remove('hidden');
+  setTimeout(() => g('q-text').focus(), 80);
+}
+
+function closeQuote() {
+  g('quote-ov').classList.add('hidden');
+  qEditId = null;
+}
+
+function updateQCharCnt() {
+  const len = (g('q-text').value || '').length;
+  const el  = g('q-char-cnt');
+  if (el) el.textContent = len + ' / 300';
+  if (el) el.style.color = len > 270 ? '#ec4899' : 'var(--t3)';
+}
+
+async function saveQuote() {
+  const text   = (g('q-text').value   || '').trim();
+  const author = (g('q-author').value || '').trim();
+  if (!text) { toast('명언을 입력해주세요.', 'wrn'); g('q-text').focus(); return; }
+  const btn = g('quote-save-btn');
+  btn.disabled = true;
+  try {
+    const now  = serverTimestamp();
+    const data = { text, author };
+    if (qEditId) {
+      await updateDoc(doc(db, 'users', me.uid, 'quotes', qEditId), { ...data, updatedAt: now });
+      const idx = quotes.findIndex(q => q._id === qEditId);
+      if (idx >= 0) quotes[idx] = { ...quotes[idx], text, author, updatedAt: new Date().toISOString() };
+      toast('명언을 수정했습니다.');
+    } else {
+      const ref  = await addDoc(colQuotes(), { ...data, createdAt: now, updatedAt: now });
+      quotes.unshift({ _id: ref.id, text, author, createdAt: new Date().toISOString() });
+      toast('명언을 저장했습니다.');
+    }
+    closeQuote();
+    renderAll();
+  } catch(e) {
+    toast('저장 실패: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteQuote(id) {
+  if (!confirm('이 명언을 삭제할까요?')) return;
+  try {
+    await deleteDoc(doc(db, 'users', me.uid, 'quotes', id));
+    quotes = quotes.filter(q => q._id !== id);
+    toast('명언을 삭제했습니다.');
+    renderAll();
+  } catch(e) {
+    toast('삭제 실패: ' + e.message, 'err');
+  }
+}
+
+function renderQuoteView(wrap) {
+  // 페이지네이션 처리
+  const fullList = [...quotes].sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
+  const pg = g('pagination');
+  let list = fullList;
+  if (perPage > 0 && scrollMode === 'page') {
+    const total   = fullList.length;
+    const maxPage = Math.max(1, Math.ceil(total / perPage));
+    curPage = Math.min(curPage, maxPage);
+    const start = (curPage - 1) * perPage;
+    list = fullList.slice(start, start + perPage);
+    if (pg) {
+      pg.classList.remove('hidden');
+      const info = g('pg-info');
+      if (info) info.textContent = curPage + ' / ' + maxPage + ' 페이지';
+      const prev = g('pg-prev'), next = g('pg-next');
+      if (prev) prev.disabled = curPage <= 1;
+      if (next) next.disabled = curPage >= maxPage;
+    }
+  } else {
+    if (pg) pg.classList.add('hidden');
+    curPage = 1;
+  }
+
+  const startIdx = (perPage > 0 && scrollMode === 'page') ? (curPage-1)*perPage : 0;
+
+  if (!list.length) {
+    wrap.innerHTML = `<div class="empty">
+      <div class="empty-icon">💬</div>
+      <p>아직 명언이 없습니다.<br>인상 깊은 한 줄을 기록해보세요!</p>
+    </div>`;
+    return;
+  }
+
+  wrap.innerHTML = list.map((q, idx) => `
+    <div class="qrow" data-qid="${esc(q._id)}">
+      <span class="qrow-num">${startIdx + idx + 1}</span>
+      <span class="qrow-quote" title="${esc(q.text)}">${esc(q.text)}</span>
+      ${q.author ? `<span class="qrow-author">${esc(q.author)}</span>` : ''}
+      <span class="qrow-date">${fmtShort(q.createdAt)}</span>
+      <span class="qrow-acts">
+        <button class="qrow-btn" data-qbtn="edit" title="수정">✏️</button>
+        <button class="qrow-btn" data-qbtn="del"  title="삭제">🗑</button>
+      </span>
+    </div>`).join('');
+
+  wrap.querySelectorAll('.qrow').forEach(el => {
+    el.addEventListener('click', e => {
+      const btn = e.target.closest('[data-qbtn]');
+      if (!btn) return;
+      const id  = el.dataset.qid;
+      if (btn.dataset.qbtn === 'edit') openQuote(id);
+      if (btn.dataset.qbtn === 'del')  deleteQuote(id);
+    });
+  });
+}
+
 function renderDash(wrap) {
   wrap.className = 'vdash';
   const total   = notes.length;
@@ -841,10 +983,17 @@ function renderNotes() {
   const isT  = nav === 'trash';
   const q    = (g('search-inp')?.value || '').trim();
 
-  // 대시보드 뷰 (필터/목록과 독립)
+  // 대시보드 뷰
   if (view === 'dash') {
     wrap.className = 'vdash';
     renderDash(wrap);
+    return;
+  }
+
+  // 한줄명언 뷰
+  if (nav === 'quote' || view === 'quote') {
+    wrap.className = 'vquote';
+    renderQuoteView(wrap);
     return;
   }
 
@@ -1236,7 +1385,22 @@ async function doHardDel(id) {
 
 function goNav(target) {
   nav = target;
-  // 대시보드 뷰에서 특정 카테고리/즐겨찾기/미분류로 이동 시 → grid로 전환
+  // 한줄명언 뷰 전환
+  if (target === 'quote') {
+    view = 'quote';
+    const tb = document.querySelector('.toolbar');
+    if (tb) tb.classList.add('quote-mode');
+    renderTitle(); renderAll();
+    if (window.innerWidth <= 768) closeMobileSb();
+    return;
+  }
+  // 한줄명언에서 다른 nav로 이동 시 view 복원
+  if (view === 'quote') {
+    view = 'grid';
+    const tb = document.querySelector('.toolbar');
+    if (tb) tb.classList.remove('quote-mode');
+  }
+  // 대시보드 뷰에서 이동 시 → grid로 전환
   if (view === 'dash') setView('grid');
   renderTitle();
   renderAll();
@@ -1718,7 +1882,10 @@ function bindEvents() {
   g('empty-trash-btn').addEventListener('click', emptyTrash);
 
   // 새 메모
-  g('new-btn').addEventListener('click', openAdd);
+  g('new-btn').addEventListener('click', () => {
+    if (nav === 'quote' || view === 'quote') openQuote();
+    else openAdd();
+  });
 
   // 뷰 전환
   g('vb-grid').addEventListener('click',     () => setView('grid'));
@@ -1817,6 +1984,7 @@ function bindEvents() {
   if (chipClear) chipClear.addEventListener('click', clearFilters);
 
   // ── 대시보드는 사이드바 nav-dash 버튼으로만 접근
+  const _eq=g('nav-quote');   if(_eq)_eq.addEventListener('click',()=>goNav('quote'));
   const _es=g('nav-starred'); if(_es)_es.addEventListener('click',()=>goNav('starred'));
   const _eu=g('nav-uncat');   if(_eu)_eu.addEventListener('click',()=>goNav('uncat'));
   const _ed=g('nav-dash');    if(_ed)_ed.addEventListener('click',()=>{nav='all';setView('dash');renderTitle();renderChipBar();renderStats();});
@@ -1879,6 +2047,17 @@ function bindEvents() {
   // ── 백업 불러오기
   const importFile = g('import-file');
   if (importFile) importFile.addEventListener('change', importData);
+
+  // ── 명언 모달
+  g('quote-close-btn').addEventListener('click', closeQuote);
+  g('quote-cancel-btn').addEventListener('click', closeQuote);
+  g('quote-ov').addEventListener('click', e => { if (e.target === g('quote-ov')) closeQuote(); });
+  g('quote-save-btn').addEventListener('click', saveQuote);
+  const qInp = g('q-text');
+  if (qInp) {
+    qInp.addEventListener('input', updateQCharCnt);
+    qInp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); saveQuote(); } });
+  }
 
   // ── Quill 에디터 높이 드래그 리사이즈
   initQuillResize();
@@ -2097,7 +2276,7 @@ onAuthStateChanged(auth, async (user) => {
     renderAll();
   } else {
     // 로그아웃 상태
-    me = null; notes = []; trashed = []; cats = [];
+    me = null; notes = []; trashed = []; cats = []; quotes = [];
     g('login-screen').classList.remove('hidden');
     g('loading-screen').classList.add('hidden');
     g('user-chip').classList.add('hidden');
