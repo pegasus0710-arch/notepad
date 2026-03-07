@@ -648,7 +648,7 @@ function renderQuoteView(wrap) {
     const total   = fullList.length;
     const maxPage = Math.max(1, Math.ceil(total / perPage));
     curPage = Math.min(curPage, maxPage);
-    const start = (curPage - 1) * perPage;
+    const start   = (curPage - 1) * perPage;
     list = fullList.slice(start, start + perPage);
     if (pg) {
       pg.classList.remove('hidden');
@@ -665,15 +665,12 @@ function renderQuoteView(wrap) {
 
   const startIdx = (perPage > 0 && scrollMode === 'page') ? (curPage-1)*perPage : 0;
 
-  if (!list.length) {
-    wrap.innerHTML = `<div class="empty">
-      <div class="empty-icon">💬</div>
-      <p>아직 명언이 없습니다.<br>인상 깊은 한 줄을 기록해보세요!</p>
-    </div>`;
-    return;
-  }
-
-  wrap.innerHTML = list.map((q, idx) => `
+  // 상단 추가 버튼 + 목록
+  const emptyBody = list.length === 0 ? `
+    <div class="q-empty">
+      <div class="q-empty-icon">💬</div>
+      <p class="q-empty-txt">아직 명언이 없습니다.<br>인상 깊은 한 줄을 기록해보세요!</p>
+    </div>` : list.map((q, idx) => `
     <div class="qrow" data-qid="${esc(q._id)}">
       <span class="qrow-num">${startIdx + idx + 1}</span>
       <span class="qrow-quote" title="${esc(q.text)}">${esc(q.text)}</span>
@@ -685,11 +682,20 @@ function renderQuoteView(wrap) {
       </span>
     </div>`).join('');
 
+  wrap.innerHTML = `
+    <div class="q-header">
+      <span class="q-count">총 ${fullList.length}개의 명언</span>
+      <button class="q-add-btn" id="q-add-btn">✏️ 명언 추가</button>
+    </div>
+    <div class="q-list">${emptyBody}</div>`;
+
+  wrap.querySelector('#q-add-btn').addEventListener('click', () => openQuote());
+
   wrap.querySelectorAll('.qrow').forEach(el => {
     el.addEventListener('click', e => {
       const btn = e.target.closest('[data-qbtn]');
       if (!btn) return;
-      const id  = el.dataset.qid;
+      const id = el.dataset.qid;
       if (btn.dataset.qbtn === 'edit') openQuote(id);
       if (btn.dataset.qbtn === 'del')  deleteQuote(id);
     });
