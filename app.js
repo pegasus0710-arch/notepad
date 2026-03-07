@@ -1642,13 +1642,22 @@ function initQuill() {
   quillInst.root.style.color = ''; // 인라인 스타일 초기화 → CSS var(--t) 적용
 
   // Quill 변경 시 hidden input 동기화 + 태그 추출
-  quillInst.on('text-change', () => {
+  // 붙여넣기 시 Quill의 scrollIntoView 가 mbody 를 상단으로 올리는 현상 방지
+  quillInst.on('text-change', (delta, oldDelta, source) => {
+    const mbody = document.querySelector('.mbody');
+    const savedScroll = mbody ? mbody.scrollTop : 0;
+
     const html  = quillInst.root.innerHTML;
     const plain = quillInst.getText();
     g('e-content').value = html === '<p><br></p>' ? '' : html;
     const newTags = extractTags(plain);
     newTags.forEach(t => { if (!eTags.includes(t)) eTags.push(t); });
     renderTagPre();
+
+    // 붙여넣기(api 아닌 user 입력)일 때 스크롤 복원
+    if (source === 'user' && mbody) {
+      requestAnimationFrame(() => { mbody.scrollTop = savedScroll; });
+    }
   });
 
   // ── Quill 내부 마우스 스크롤
@@ -1684,6 +1693,18 @@ function initQuill() {
 
   // scrollIntoView 비활성화 (서식 적용 시 스크롤 점프 방지)
   quillInst.scrollIntoView = function() {};
+
+  // 붙여넣기 시 mbody 스크롤 위치 완전 고정
+  quillInst.root.addEventListener('paste', () => {
+    const mbody = document.querySelector('.mbody');
+    if (!mbody) return;
+    const savedTop = mbody.scrollTop;
+    // paste 처리 완료 후 두 프레임에 걸쳐 복원 (Quill 내부 처리 대기)
+    requestAnimationFrame(() => {
+      mbody.scrollTop = savedTop;
+      requestAnimationFrame(() => { mbody.scrollTop = savedTop; });
+    });
+  }, true); // capture 단계에서 처리
 }
 
 function setQuillContent(html) {
