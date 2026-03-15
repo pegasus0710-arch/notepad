@@ -928,7 +928,7 @@ function renderDash(wrap) {
   // ── 최근 수정 메모 (즐겨찾기 제외, 최대 6개)
   const recentEdited = notes.filter(n => !n.starred)
     .sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0))
-    .slice(0, 6);
+    .slice(0, 5);
 
   // ── 카테고리
   const catItems = cats.map((c, idx) => {
