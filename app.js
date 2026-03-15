@@ -821,9 +821,13 @@ function renderQuoteView(wrap) {
     </div>` : list.map((q, idx) => `
     <div class="qrow" data-qid="${esc(q._id)}">
       <span class="qrow-num">${startIdx + idx + 1}</span>
-      <span class="qrow-quote" title="${esc(q.text)}">${esc(q.text)}</span>
-      ${q.author ? `<span class="qrow-author">${esc(q.author)}</span>` : ''}
-      <span class="qrow-date">${fmtShort(q.createdAt)}</span>
+      <div class="qrow-body">
+        <div class="qrow-quote">${esc(q.text)}</div>
+        <div class="qrow-meta">
+          ${q.author ? `<span class="qrow-author">${esc(q.author)}</span>` : ''}
+          <span class="qrow-date">${fmtShort(q.createdAt)}</span>
+        </div>
+      </div>
       <span class="qrow-acts">
         <button class="qrow-btn" data-qbtn="edit" title="수정">✏️</button>
         <button class="qrow-btn" data-qbtn="del"  title="삭제">🗑</button>
