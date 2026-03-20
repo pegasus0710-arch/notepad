@@ -1500,6 +1500,17 @@ function initQuill() {
     theme: 'snow',
     placeholder: '내용을 입력하세요...',
     modules: {
+      keyboard: {
+        bindings: {
+          // "1. " 자동 리스트 변환 비활성화
+          'list autofill': {
+            key: ' ',
+            shiftKey: null,
+            prefix: /^\s*?(\d+\.|\*|-)\s{0,1}$/,
+            handler() { return true; }
+          }
+        }
+      },
       toolbar: {
         container: toolbarOptions,
         handlers: {
