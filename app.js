@@ -74,7 +74,21 @@ const docSett  = () => doc(db, 'users', me.uid, 'settings', 'main');
 // ══════════════════════════════════════════════════════
 // 데이터 로드
 // ══════════════════════════════════════════════════════
-async function loadAll() {
+async function purgeLegacyThumbCache() {
+  // 구버전 'thumb_' 키(btoa slice 방식) → 캐시 충돌 원인, 전체 삭제
+  try {
+    const toDelete = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('thumb_') && !k.startsWith('thumb2_')) toDelete.push(k);
+    }
+    toDelete.forEach(k => localStorage.removeItem(k));
+    if (toDelete.length) console.log(`[썸네일] 오염된 캐시 ${toDelete.length}개 삭제`);
+  } catch(_) {}
+}
+
+function loadAll() {
+  purgeLegacyThumbCache();
   setSyncStatus('ing');
   try {
     // 메모
@@ -1266,11 +1280,20 @@ function kanbanCardHtml(n, isT) {
 // ─────────────────────────────────────────
 // LINK THUMBNAIL (microlink.io)
 // ─────────────────────────────────────────
-async function fetchThumb(url) {
+async // URL → 충돌 없는 캐시 키 (전체 URL 해시)
+function thumbCacheKey(url) {
+  // 간단한 djb2 해시 → 16진수 문자열 (URL 전체 반영)
+  let h = 5381;
+  for (let i = 0; i < url.length; i++) h = ((h << 5) + h) ^ url.charCodeAt(i);
+  return 'thumb2_' + (h >>> 0).toString(16) + '_' + url.length;
+}
+
+function fetchThumb(url) {
   if (thumbCache.has(url)) return thumbCache.get(url);
-  // localStorage 캐시 확인
+  // localStorage 캐시 확인 (thumb2_ 키 사용 — 구버전 thumb_ 키는 무시)
   try {
-    const cached = localStorage.getItem('thumb_' + btoa(url).slice(0,40));
+    const key = thumbCacheKey(url);
+    const cached = localStorage.getItem(key);
     if (cached) { const d = JSON.parse(cached); thumbCache.set(url, d); return d; }
   } catch(_) {}
   try {
@@ -1283,7 +1306,7 @@ async function fetchThumb(url) {
       url:   j.data?.url || url
     } : null;
     thumbCache.set(url, d);
-    if (d) try { localStorage.setItem('thumb_' + btoa(url).slice(0,40), JSON.stringify(d)); } catch(_) {}
+    if (d) try { localStorage.setItem(thumbCacheKey(url), JSON.stringify(d)); } catch(_) {}
     return d;
   } catch(_) { thumbCache.set(url, null); return null; }
 }
