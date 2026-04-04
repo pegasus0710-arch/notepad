@@ -1288,27 +1288,60 @@ function thumbCacheKey(url) {
   return 'thumb2_' + (h >>> 0).toString(16) + '_' + url.length;
 }
 
+// YouTube URL에서 video ID 추출
+function ytVideoId(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtu.be')) return u.pathname.slice(1).split('?')[0];
+    if (u.hostname.includes('youtube.com')) {
+      if (u.pathname.includes('/shorts/')) return u.pathname.split('/shorts/')[1].split('/')[0];
+      return u.searchParams.get('v');
+    }
+  } catch(_) {}
+  return null;
+}
+
 async function fetchThumb(url) {
   if (thumbCache.has(url)) return thumbCache.get(url);
-  // localStorage 캐시 확인 (thumb2_ 키 사용 — 구버전 thumb_ 키는 무시)
+  // localStorage 캐시 확인
   try {
     const key = thumbCacheKey(url);
     const cached = localStorage.getItem(key);
     if (cached) { const d = JSON.parse(cached); thumbCache.set(url, d); return d; }
   } catch(_) {}
-  try {
-    const r = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}&palette=false&audio=false&video=false&iframe=false`);
-    const j = await r.json();
-    const d = j.status === 'success' ? {
-      img:   j.data?.image?.url || j.data?.logo?.url || '',
-      title: j.data?.title || '',
-      desc:  j.data?.description || '',
-      url:   j.data?.url || url
-    } : null;
-    thumbCache.set(url, d);
-    if (d) try { localStorage.setItem(thumbCacheKey(url), JSON.stringify(d)); } catch(_) {}
-    return d;
-  } catch(_) { thumbCache.set(url, null); return null; }
+
+  let result = null;
+
+  // ── YouTube: API 없이 직접 썸네일 URL 생성
+  const vid = ytVideoId(url);
+  if (vid) {
+    // maxresdefault → hqdefault 순으로 시도
+    const imgUrl = `https://img.youtube.com/vi/${vid}/hqdefault.jpg`;
+    result = {
+      img:   imgUrl,
+      title: '',
+      desc:  '',
+      url:   url
+    };
+  } else {
+    // ── 일반 사이트: microlink.io
+    try {
+      const r = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}&palette=false&audio=false&video=false&iframe=false`);
+      const j = await r.json();
+      if (j.status === 'success') {
+        result = {
+          img:   j.data?.image?.url || j.data?.logo?.url || '',
+          title: j.data?.title || '',
+          desc:  j.data?.description || '',
+          url:   j.data?.url || url
+        };
+      }
+    } catch(_) {}
+  }
+
+  thumbCache.set(url, result);
+  if (result) try { localStorage.setItem(thumbCacheKey(url), JSON.stringify(result)); } catch(_) {}
+  return result;
 }
 
 async function thumbCardHtml(l, data) {
