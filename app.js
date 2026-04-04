@@ -1280,7 +1280,7 @@ function kanbanCardHtml(n, isT) {
 // ─────────────────────────────────────────
 // LINK THUMBNAIL (microlink.io)
 // ─────────────────────────────────────────
-async // URL → 충돌 없는 캐시 키 (전체 URL 해시)
+// URL → 충돌 없는 캐시 키 (전체 URL 해시)
 function thumbCacheKey(url) {
   // 간단한 djb2 해시 → 16진수 문자열 (URL 전체 반영)
   let h = 5381;
