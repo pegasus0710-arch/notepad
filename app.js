@@ -87,7 +87,7 @@ async function purgeLegacyThumbCache() {
   } catch(_) {}
 }
 
-function loadAll() {
+async function loadAll() {
   purgeLegacyThumbCache();
   setSyncStatus('ing');
   try {
@@ -1311,7 +1311,7 @@ async function fetchThumb(url) {
   } catch(_) { thumbCache.set(url, null); return null; }
 }
 
-function thumbCardHtml(l, data) {
+async function thumbCardHtml(l, data) {
   const fav = favicon(l.url);
   return `<a class="lprev det-thumb" href="${esc(l.url)}" target="_blank" rel="noopener" style="max-width:100%">
     ${data.img
@@ -1695,7 +1695,7 @@ function openEdit(id) {
   }, 80);
 }
 
-function closeEdit(force = false) {
+async function closeEdit(force = false) {
   if (!force) {
     const hasTitle   = (g('e-title')?.value || '').trim().length > 0;
     const hasContent = getQuillContent().replace(/<[^>]*>/g, '').trim().length > 0;
@@ -2215,7 +2215,7 @@ function stopDraftTimer() {
 // ══════════════════════════════════════════════════════
 // 백업 / 복원
 // ══════════════════════════════════════════════════════
-function exportData() {
+async function exportData() {
   const data = {
     version:    1,
     exportedAt: new Date().toISOString(),
