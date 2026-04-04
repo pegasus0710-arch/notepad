@@ -1288,7 +1288,7 @@ function thumbCacheKey(url) {
   return 'thumb2_' + (h >>> 0).toString(16) + '_' + url.length;
 }
 
-function fetchThumb(url) {
+async function fetchThumb(url) {
   if (thumbCache.has(url)) return thumbCache.get(url);
   // localStorage 캐시 확인 (thumb2_ 키 사용 — 구버전 thumb_ 키는 무시)
   try {
