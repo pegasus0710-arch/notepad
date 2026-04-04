@@ -1301,44 +1301,75 @@ function ytVideoId(url) {
   return null;
 }
 
-async function fetchThumb(url) {
-  if (thumbCache.has(url)) return thumbCache.get(url);
-  // localStorage 캐시 확인
+// ── 썸네일 요청 큐 (microlink.io 429 방지 — 500ms 간격)
+const _thumbQueue = [];
+let   _thumbRunning = false;
+async function _runThumbQueue() {
+  if (_thumbRunning) return;
+  _thumbRunning = true;
+  while (_thumbQueue.length) {
+    const { url, resolve } = _thumbQueue.shift();
+    const result = await _fetchThumbDirect(url);
+    resolve(result);
+    if (_thumbQueue.length) await new Promise(r => setTimeout(r, 500)); // 500ms 간격
+  }
+  _thumbRunning = false;
+}
+function fetchThumb(url) {
+  // 메모리 캐시
+  if (thumbCache.has(url)) return Promise.resolve(thumbCache.get(url));
+  // localStorage 캐시
   try {
     const key = thumbCacheKey(url);
     const cached = localStorage.getItem(key);
-    if (cached) { const d = JSON.parse(cached); thumbCache.set(url, d); return d; }
+    if (cached) { const d = JSON.parse(cached); thumbCache.set(url, d); return Promise.resolve(d); }
   } catch(_) {}
-
-  let result = null;
-
-  // ── YouTube: API 없이 직접 썸네일 URL 생성
+  // YouTube는 큐 없이 즉시 반환
   const vid = ytVideoId(url);
   if (vid) {
-    // maxresdefault → hqdefault 순으로 시도
-    const imgUrl = `https://img.youtube.com/vi/${vid}/hqdefault.jpg`;
-    result = {
-      img:   imgUrl,
-      title: '',
-      desc:  '',
-      url:   url
-    };
-  } else {
-    // ── 일반 사이트: microlink.io
+    const result = { img: `https://img.youtube.com/vi/${vid}/hqdefault.jpg`, title: '', desc: '', url };
+    thumbCache.set(url, result);
+    try { localStorage.setItem(thumbCacheKey(url), JSON.stringify(result)); } catch(_) {}
+    return Promise.resolve(result);
+  }
+  // 일반 사이트 → 큐에 추가
+  return new Promise(resolve => {
+    _thumbQueue.push({ url, resolve });
+    _runThumbQueue();
+  });
+}
+
+// microlink.io 실제 요청 (큐에서 호출)
+async function _fetchThumbDirect(url) {
+  let result = null;
+  // ── 1차: jsonlink.io (무제한 무료)
+  try {
+    const r = await fetch(`https://jsonlink.io/api/extract?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(5000) });
+    const j = await r.json();
+    if (j && (j.images?.length || j.title)) {
+      result = {
+        img:   j.images?.[0] || '',
+        title: j.title || '',
+        desc:  j.description || '',
+        url:   j.url || url
+      };
+    }
+  } catch(_) {}
+  // ── 2차: microlink.io (fallback)
+  if (!result || !result.img) {
     try {
-      const r = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}&palette=false&audio=false&video=false&iframe=false`);
+      const r = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}&palette=false&audio=false&video=false&iframe=false`, { signal: AbortSignal.timeout(6000) });
       const j = await r.json();
       if (j.status === 'success') {
         result = {
           img:   j.data?.image?.url || j.data?.logo?.url || '',
-          title: j.data?.title || '',
-          desc:  j.data?.description || '',
+          title: j.data?.title || result?.title || '',
+          desc:  j.data?.description || result?.desc || '',
           url:   j.data?.url || url
         };
       }
     } catch(_) {}
   }
-
   thumbCache.set(url, result);
   if (result) try { localStorage.setItem(thumbCacheKey(url), JSON.stringify(result)); } catch(_) {}
   return result;
