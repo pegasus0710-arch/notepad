@@ -1342,6 +1342,9 @@ function fetchThumb(url) {
 // microlink.io 실제 요청 (큐에서 호출)
 async function _fetchThumbDirect(url) {
   let result = null;
+  // microlink.io 429 차단 중이면 24시간 동안 건너뜀
+  const mlBlocked = window._microlinkBlocked && (Date.now() - window._microlinkBlocked < 86400000);
+
   // ── 1차: jsonlink.io (무제한 무료)
   try {
     const r = await fetch(`https://jsonlink.io/api/extract?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(5000) });
@@ -1355,18 +1358,24 @@ async function _fetchThumbDirect(url) {
       };
     }
   } catch(_) {}
-  // ── 2차: microlink.io (fallback)
-  if (!result || !result.img) {
+  // ── 2차: microlink.io (하루 한도 있음 — 1차 실패 시에만 1번 시도)
+  if (!result?.img && !mlBlocked) {
     try {
       const r = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}&palette=false&audio=false&video=false&iframe=false`, { signal: AbortSignal.timeout(6000) });
-      const j = await r.json();
-      if (j.status === 'success') {
-        result = {
-          img:   j.data?.image?.url || j.data?.logo?.url || '',
-          title: j.data?.title || result?.title || '',
-          desc:  j.data?.description || result?.desc || '',
-          url:   j.data?.url || url
-        };
+      if (r.status === 429) {
+        // 한도 초과 → microlink 요청 중단 플래그
+        window._microlinkBlocked = Date.now();
+        console.warn('[썸네일] microlink.io 일일 한도 초과 — jsonlink.io만 사용');
+      } else {
+        const j = await r.json();
+        if (j.status === 'success') {
+          result = {
+            img:   j.data?.image?.url || j.data?.logo?.url || '',
+            title: j.data?.title || result?.title || '',
+            desc:  j.data?.description || result?.desc || '',
+            url:   j.data?.url || url
+          };
+        }
       }
     } catch(_) {}
   }
@@ -1375,7 +1384,7 @@ async function _fetchThumbDirect(url) {
   return result;
 }
 
-async function thumbCardHtml(l, data) {
+function thumbCardHtml(l, data) {
   const fav = favicon(l.url);
   return `<a class="lprev det-thumb" href="${esc(l.url)}" target="_blank" rel="noopener" style="max-width:100%">
     ${data.img
